@@ -16,7 +16,7 @@ Convenção: só se registra como "passou" um teste que foi executado, com o com
 | Fase | Status | Tarefas | Concluída em |
 |---|---|---|---|
 | 1 — Infraestrutura Docker e PostgreSQL/pgvector | **Concluída** | T001–T007 (7/7) | 2026-10-22 |
-| 2 — Estrutura Maven e inicialização dos dois microsserviços | Pendente | T008–T018 | — |
+| 2 — Estrutura Maven e inicialização dos dois microsserviços | **Concluída** | T008–T018 (11/11) | 2026-10-22 |
 | 3 — Persistência e ingestão de conhecimento | Pendente | T019–T027 | — |
 | 4 — Chunking e geração de embeddings | Pendente | T028–T036 | — |
 | 5 — Busca vetorial e MCP Server | Pendente | T037–T043 | — |
@@ -134,6 +134,101 @@ Nenhum teste Java foi executado nesta fase: ainda não existe código Java (Fase
 **Fase 2 — Estrutura Maven e inicialização dos dois microsserviços** (T008–T018). A primeira tarefa é a **T008** (`pom.xml` agregador e Maven Wrapper); depois T009 e T010 em paralelo.
 
 ---
+
+### Fase 2 — Estrutura Maven e inicialização dos dois microsserviços
+
+**Status:** concluída. **Data:** 2026-10-22. **Tarefas:** T008 a T018 (11 de 11).
+
+#### O que foi entregue
+
+| Tarefa | Resultado |
+|---|---|
+| T008 | `pom.xml` agregador (só `<modules>`, não é parent) e Maven Wrapper 3.9.16 (`only-script`; o JAR do wrapper fica fora do git) |
+| T009 | `api-conhecimento`: parent `spring-boot-starter-parent` 4.1.2, BOM do Spring AI 2.0.1, porta 8081, virtual threads, logs ECS, `spring.ai.model.chat: none` |
+| T010 | `api-atendimentos`: mesma base, porta 8082, `spring.ai.model.embedding: none`, sem JDBC, `max-tokens` 600 e temperatura 0,0 |
+| T011 | `PropriedadesConhecimento` / `PropriedadesAtendimentos` (`record` + `@Validated`); a subida falha citando o nome da variável |
+| T012 | `CorrelacaoFilter`: `X-Correlation-Id` em toda resposta (derivado do `traceparent` válido, senão UUID novo) e MDC |
+| T013 | `CodigoErro`, `ProblemaFactory`, `EscritorProblema`, `ManipuladorErrosRest`, `ErroContainerController`, `LimiteTamanhoCorpoFilter` (256 KB) |
+| T014 | `SecurityConfig` com cadeias de monitoramento/docs, API e padrão; `ApiKeyAuthFilter`, `ComparadorChave`, `RespostaSegurancaProblema` |
+| T015 | Actuator expondo `health`, `info` e `metrics`; métricas e detalhes só com `MONITORAMENTO_API_KEY` |
+| T016 | springdoc 3.1.1; `OpenApiConfig`; Swagger UI só no perfil `local` |
+| T017 | `ArquiteturaTest` (ArchUnit) nos dois serviços e `IsolamentoDeDependenciasTest` na `api-atendimentos` |
+| T018 | `Dockerfile` multi-stage (usuário `10001`), `.dockerignore`, `docker-compose.yml` com as duas APIs |
+
+#### Arquivos criados
+
+- Raiz: `pom.xml`, `mvnw`, `mvnw.cmd`, `.mvn/wrapper/maven-wrapper.properties`
+- Em cada serviço: `pom.xml`, `Dockerfile`, `.dockerignore`, `src/main/resources/application.yml` e `application-local.yml`
+- `api-conhecimento/src/main/java/br/com/coti/conhecimento/`: `ApiConhecimentoApplication`; `api/erro/` (`CodigoErro`, `CorrelacaoHttp`, `CorpoGrandeDemaisException`, `ErroCampo`, `ErroContainerController`, `EscritorProblema`, `ManipuladorErrosRest`, `ProblemaFactory`); `infraestrutura/config/` (`PropriedadesConhecimento`, `OpenApiConfig`); `infraestrutura/observabilidade/CorrelacaoFilter`; `infraestrutura/seguranca/` (`ApiKeyAuthFilter`, `ComparadorChave`, `LimiteTamanhoCorpoFilter`, `RespostaSegurancaProblema`, `SecurityConfig`)
+- `api-atendimentos/src/main/java/br/com/coti/atendimentos/`: as mesmas classes, com `PropriedadesAtendimentos`, o catálogo de erros da API (inclui `TEMPO_ESGOTADO`) e um `SecurityConfig` com a rota pública de perguntas
+- Testes de cada serviço: `suporte/TesteWeb`, `suporte/ChavesTeste`, `api/erro/ManipuladorErrosRestTest`, `arquitetura/ArquiteturaTest`, `infraestrutura/config/{ConfiguracaoSpringAiTest, InicializacaoSemVariavelTest, OpenApiTest}`, `infraestrutura/observabilidade/CorrelacaoFilterTest`, `infraestrutura/seguranca/{ActuatorAcessoTest, ComparadorChaveTest, LimiteTamanhoCorpoFilterTest, SegurancaTest}`; na `api-atendimentos`, também `arquitetura/IsolamentoDeDependenciasTest`
+
+#### Arquivos modificados
+
+- `README.md`: variáveis, build, testes, compose e perfil `local`
+- `docker-compose.yml`: serviços `api-conhecimento` e `api-atendimentos`
+- `specs/03-architecture.md`: nota sobre `api.erro` em §3.1
+- `specs/05-tasks.md`: T008–T018 marcadas `[x]`; T019 passa a incluir JDBC e Flyway (adiados da T009)
+- `specs/08-checklist.md`: este registro
+
+#### Comandos executados e resultados
+
+| Comando | Resultado |
+|---|---|
+| `./mvnw -v` | Maven 3.9.16, JDK 21.0.12 |
+| `./mvnw verify` (raiz) | **BUILD SUCCESS**: `api-conhecimento` 60 testes, 0 falhas, 1 ignorado; `api-atendimentos` 61 testes, 0 falhas, 1 ignorado |
+| `./mvnw -pl api-conhecimento test -Dtest=ArquiteturaTest` com uma classe temporária em `dominio` que importava `@Component` | **Falhou**, como esperado (regra do domínio violada); classe removida; o teste voltou a passar (3 de 3) |
+| `env -u OPENAI_API_KEY docker compose up -d --build` | Duas imagens construídas; os 3 contêineres ficaram `healthy` |
+| `curl` em `:8081` e `:8082`, `/actuator/health` | 200 `{"groups":["liveness","readiness"],"status":"UP"}`, com `X-Correlation-Id` |
+| `curl http://localhost:8081/api/conhecimentos` | 401 `application/problem+json` com `codigo`, `correlacaoId` e `timestamp` |
+| `curl -X POST http://localhost:8082/api/atendimentos/perguntar` | 404 (a rota é pública; ainda não há controlador) |
+| `curl http://localhost:8081/actuator/env` sem chave | 401 |
+| `docker exec ... id` nos dois contêineres | `uid=10001(coti)` |
+| Parar `coti-api-conhecimento` e consultar a saúde da `api-atendimentos` | 200 `UP` (serviço independente) |
+
+#### Testes automatizados (resumo)
+
+| Área | Cobertura | Serviços |
+|---|---|---|
+| Erros | 400 (validação, campo desconhecido, JSON malformado, tipo de parâmetro, parâmetro obrigatório, violação de restrição), 404, 405, 415, 413, 500 genérico sem detalhe interno, `/error` do contêiner e ausência do `BasicErrorController`; o valor recebido nunca aparece na mensagem | os dois |
+| Segurança | 401 sem chave, chave errada, chaves trocadas, negar por padrão (`/mcp` e rotas desconhecidas em 401), sem cookie, sem CSRF, cabeçalhos padrão | os dois |
+| Actuator | health público só com `status` e `groups`; componentes com chave; liveness e readiness; métricas só com chave; `env`, `configprops`, `beans`, `heapdump`, `threaddump`, `mappings`, `loggers` e `shutdown` não expostos | os dois |
+| Correlação | `traceparent` válido, ausente, inválido e zerado; id do cliente ignorado; MDC limpo (inclusive com falha na cadeia) | os dois |
+| Limite de corpo | por `Content-Length`, no limite, e fluxo sem `Content-Length` (chunked) | os dois |
+| Inicialização | variável ausente e em branco, para cada obrigatória, citando o nome e nunca o valor | os dois |
+| Spring AI | `EmbeddingModel` só na `api-conhecimento`; `ChatModel` só na `api-atendimentos`; `max-retries`, modelo, dimensão, temperatura | os dois |
+| OpenAPI | perfil padrão (especificação com chave, sem Swagger UI) e perfil `local` | os dois |
+| Arquitetura | domínio puro, aplicação sem web/IA/banco, camadas; `api-atendimentos` sem banco, vetores nem embeddings; classes de JDBC, PostgreSQL, pgvector, JPA e Flyway ausentes do classpath | os dois |
+
+**Teste ignorado (1 por serviço):** a variante "variável ausente" de `OPENAI_API_KEY` não roda quando a variável existe no ambiente do SO (a suposição `assumeThat` a pula), e neste computador ela está definida. A variante "em branco" da mesma variável roda e passa, e o mecanismo de "ausente" é o mesmo das outras duas variáveis, que rodam. Para executá-la, rode o build em um shell sem essa variável.
+
+#### Decisões e desvios
+
+- **JDBC, Flyway e driver PostgreSQL adiados para a T019.** A T009 listava `spring-boot-starter-jdbc`, mas sem banco e sem `DataSource` o contexto não sobe, e os testes da Fase 2 não têm Testcontainers (T020). A T019 foi ajustada.
+- **Starter da OpenAI já na Fase 2** (previsto no risco da fase), para provar `spring.ai.model.chat: none`, `spring.ai.model.embedding: none` e o formato das propriedades da 2.0.
+- **Placeholder não resolvido era aceito como chave** (achado pelo `InicializacaoSemVariavelTest`): quando a variável não existe, o Spring mantém o texto literal `${NOME}` ao vincular `@ConfigurationProperties`. Sem a correção, a chave administrativa seria o próprio nome da variável. As propriedades agora recusam valor em branco **e** valor que começa com `${`.
+- **Correlação sem biblioteca de tracing.** O `CorrelacaoFilter` aceita um `traceparent` W3C e gera o UUID; o tracer do Micrometer (e a propagação para o MCP) fica para a T065, porque é dependência nova.
+- **`api.erro` acessível pela infraestrutura.** As camadas do `03-architecture.md` proibiam `infraestrutura → api`, mas segurança e filtros precisam escrever 401, 403 e 413 no formato do contrato. `api.erro` virou a "linguagem de erro HTTP comum" (nota em §3.1 e regra ArchUnit).
+- **Health público devolve `groups`** (`liveness`, `readiness`) além de `status`, sem componentes nem detalhes. O contrato mostra só `status`; a diferença é inofensiva.
+- **Rota pública da `api-atendimentos` aceita qualquer método**, para um `GET` receber o 405 do contrato, e não 401.
+- **Prometheus fora do exposure.** O endpoint exige o registro `micrometer-registry-prometheus`, dependência nova (T063).
+- **Testes de erro usam um controlador de teste** em cada serviço, importado só pela classe de teste (`/api/teste/**` na `api-conhecimento`; a rota de perguntas na `api-atendimentos`). Quando os controladores reais existirem (Fases 3 e 6), esses testes devem passar a usar rotas reais.
+- **Pacotes do Spring Boot 4 confirmados na prática:** `org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc`, `org.springframework.boot.webmvc.error.ErrorController`, `org.springframework.boot.webmvc.autoconfigure.error.BasicErrorController` e Jackson 3 (`tools.jackson...`). Classes internas de teste não entram na varredura de componentes.
+- **Boot 4.1.2 com Spring AI 2.0.1 compilou e executou sem ajuste**; o alerta da Fase 1 sobre o Boot 4.1.1 não se confirmou.
+
+#### Pendências e riscos
+
+- `OPENAI_API_KEY` real existe no ambiente do SO deste computador, e o Compose a usaria no lugar da chave do `.env`. Subi o compose com `env -u OPENAI_API_KEY` para os contêineres receberem a chave falsa. Nenhuma chamada à OpenAI é feita nesta fase.
+- O `.env` local tem valores gerados (chaves de API de teste e senhas) e valores provisórios (`OPENAI_API_KEY` falsa e `OPENAI_CHAT_MODEL=modelo-provisorio-ate-a-T070`); está ignorado pelo git e não foi exibido.
+- Perfil `local`: coberto pelos testes de OpenAPI; não rodei uma instância real com `-Dspring-boot.run.profiles=local` (os contêineres usam o perfil padrão).
+- `/v3/api-docs`: no perfil padrão exige a chave de monitoramento; no `local` é pública (alinhado ao item 6 da seção 11.2 da arquitetura).
+- `Retry-After` em 429 e 503 ainda não existe: entra junto com os fluxos que geram esses códigos (Fases 6 e 8).
+- A `ManipuladorErrosRest` e os filtros estão duplicados nos dois serviços, por desenho (os serviços não compartilham código).
+- O commit `31cff7c` com os arquivos das Fases 1 e 2 foi feito durante a sessão, não por mim.
+
+#### Próxima fase
+
+**Fase 3 — Persistência e ingestão de conhecimento** (T019–T027). A primeira tarefa é a **T019**: JDBC, Flyway e PostgreSQL com as migrações V1 a V3.
 
 ## 2. Checklist de produção (a completar na T072)
 

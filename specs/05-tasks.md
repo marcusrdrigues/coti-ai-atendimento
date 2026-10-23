@@ -30,32 +30,32 @@ Legenda: `CON` = `api-conhecimento`, `ATE` = `api-atendimentos`, `INF` = infraes
 
 ## Fase 2 — Estrutura Maven e inicialização dos dois microsserviços
 
-- [ ] **T008** `INF` — Criar `pom.xml` agregador (`packaging pom`, módulos `api-conhecimento` e `api-atendimentos`) e Maven Wrapper.
+- [x] **T008** `INF` — Criar `pom.xml` agregador (`packaging pom`, módulos `api-conhecimento` e `api-atendimentos`) e Maven Wrapper.
   Dep.: T006. Verificação: `./mvnw -v` mostra Maven 3.9.x e JDK 21.
-- [ ] **T009** `CON` — Criar `api-conhecimento/pom.xml` (parent `spring-boot-starter-parent` da versão de T006, `spring-ai-bom:2.0.1`, starters web, validation, security, actuator, jdbc), `ApiConhecimentoApplication`, `application.yml` (porta 8081, virtual threads, ECS) e `application-local.yml`.
+- [x] **T009** `CON` — Criar `api-conhecimento/pom.xml` (parent `spring-boot-starter-parent` da versão de T006, `spring-ai-bom:2.0.1`, starters web, validation, security, actuator, jdbc), `ApiConhecimentoApplication`, `application.yml` (porta 8081, virtual threads, ECS) e `application-local.yml`.
   Dep.: T008. Verificação: `./mvnw -pl api-conhecimento verify` passa (teste de contexto com propriedades de teste).
-- [ ] **T010** `ATE` — Criar `api-atendimentos/pom.xml` (mesma base, sem JDBC), `ApiAtendimentosApplication`, `application.yml` (porta 8082, `spring.ai.model.embedding: none`) e `application-local.yml`.
+- [x] **T010** `ATE` — Criar `api-atendimentos/pom.xml` (mesma base, sem JDBC), `ApiAtendimentosApplication`, `application.yml` (porta 8082, `spring.ai.model.embedding: none`) e `application-local.yml`.
   Dep.: T008. Verificação: `./mvnw -pl api-atendimentos verify` passa.
-- [ ] **T011** `CON` `ATE` — Propriedades tipadas (`record` + `@Validated`) dos prefixos `coti.*` e checagem das variáveis obrigatórias; teste de subida sem variável obrigatória.
+- [x] **T011** `CON` `ATE` — Propriedades tipadas (`record` + `@Validated`) dos prefixos `coti.*` e checagem das variáveis obrigatórias; teste de subida sem variável obrigatória.
   Dep.: T009, T010. Verificação: `InicializacaoSemVariavelTest` prova falha com mensagem que cita o nome da variável e não o valor.
-- [ ] **T012** `CON` `ATE` — `CorrelacaoFilter`: `X-Correlation-Id` = trace id em toda resposta e no MDC.
+- [x] **T012** `CON` `ATE` — `CorrelacaoFilter`: `X-Correlation-Id` = trace id em toda resposta e no MDC.
   Dep.: T009, T010. Verificação: `CorrelacaoFilterTest` nos dois serviços.
-- [ ] **T013** `CON` `ATE` — `ManipuladorErrosRest`, `CodigoErro` (catálogo do contrato §2.2) e `ProblemaFactory`; `include-stacktrace=never`; Jackson falhando em propriedade desconhecida; limite de corpo de 256 KB.
+- [x] **T013** `CON` `ATE` — `ManipuladorErrosRest`, `CodigoErro` (catálogo do contrato §2.2) e `ProblemaFactory`; `include-stacktrace=never`; Jackson falhando em propriedade desconhecida; limite de corpo de 256 KB.
   Dep.: T012. Verificação: testes de 404, 405, 413, 415 e 500 genérico em `application/problem+json` com `codigo`, `correlacaoId`, `timestamp`, sem stack trace.
-- [ ] **T014** `CON` `ATE` — `SecurityConfig` (stateless, CSRF off, CORS sem origens, nega por padrão), `ApiKeyAuthFilter` e `ComparadorChave` (tempo constante); públicos: `/actuator/health/**`, `/actuator/info` e, no ATE, `POST /api/atendimentos/perguntar`.
+- [x] **T014** `CON` `ATE` — `SecurityConfig` (stateless, CSRF off, CORS sem origens, nega por padrão), `ApiKeyAuthFilter` e `ComparadorChave` (tempo constante); públicos: `/actuator/health/**`, `/actuator/info` e, no ATE, `POST /api/atendimentos/perguntar`.
   Dep.: T013. Verificação: `SecurityConfigTest` (401 em rota protegida sem chave; rotas públicas acessíveis).
-- [ ] **T015** `CON` `ATE` — Actuator: expor só `health`, `info`, `metrics`, `prometheus`; `metrics`/`prometheus` e detalhes do health exigem `MONITORAMENTO_API_KEY` em `X-Api-Key`; `liveness`/`readiness` habilitados.
+- [x] **T015** `CON` `ATE` — Actuator: expor só `health`, `info`, `metrics`, `prometheus`; `metrics`/`prometheus` e detalhes do health exigem `MONITORAMENTO_API_KEY` em `X-Api-Key`; `liveness`/`readiness` habilitados.
   Dep.: T014. Verificação: `ActuatorAcessoTest` (público só `status`; `env`/`heapdump` 404; métricas 401 sem chave).
-- [ ] **T016** `CON` `ATE` — springdoc 3.x: `/v3/api-docs` e Swagger UI só no perfil `local`; `OpenApiConfig` com os esquemas de segurança do contrato.
+- [x] **T016** `CON` `ATE` — springdoc 3.x: `/v3/api-docs` e Swagger UI só no perfil `local`; `OpenApiConfig` com os esquemas de segurança do contrato.
   Dep.: T014. Verificação: teste obtém `/v3/api-docs`; perfil padrão sem `/swagger-ui.html`.
-- [ ] **T017** `CON` `ATE` — `ArquiteturaTest` (ArchUnit): direção `api → aplicacao → dominio`, `infraestrutura → aplicacao/dominio`; domínio sem Spring, Spring AI, JDBC, MCP, Jackson; ATE sem JDBC, `VectorStore`, `EmbeddingModel`.
+- [x] **T017** `CON` `ATE` — `ArquiteturaTest` (ArchUnit): direção `api → aplicacao → dominio`, `infraestrutura → aplicacao/dominio`; domínio sem Spring, Spring AI, JDBC, MCP, Jackson; ATE sem JDBC, `VectorStore`, `EmbeddingModel`.
   Dep.: T009, T010. Verificação: teste passa e falha ao introduzir de propósito uma dependência proibida (verificado localmente, não versionado).
-- [ ] **T018** `CON` `ATE` — `Dockerfile` multi-stage com usuário não root e tag de base fixa; acrescentar as duas APIs ao `docker-compose.yml` (portas `127.0.0.1:8081` e `127.0.0.1:8082`; ATE sem `depends_on` de saúde da CON).
+- [x] **T018** `CON` `ATE` — `Dockerfile` multi-stage com usuário não root e tag de base fixa; acrescentar as duas APIs ao `docker-compose.yml` (portas `127.0.0.1:8081` e `127.0.0.1:8082`; ATE sem `depends_on` de saúde da CON).
   Dep.: T004, T015. Verificação: `docker compose up -d --build`; `curl` em `/actuator/health` das duas APIs responde `UP`.
 
 ## Fase 3 — Persistência e ingestão de conhecimento
 
-- [ ] **T019** `CON` — Dependências Flyway e PostgreSQL; migrações `V1__extensoes.sql` (`vector`, `hstore`, `uuid-ossp`), `V2__documento.sql` (tabela de `03-architecture.md` §4.1, `hash_conteudo` único, `CHECK` de status e categoria), `V3__vector_store.sql` (`vector(1536)`, índice HNSW `vector_cosine_ops`); Flyway com `coti_owner`, aplicação com `coti_app`.
+- [ ] **T019** `CON` — Dependências `spring-boot-starter-jdbc`, Flyway e PostgreSQL (adiadas da T009, para a Fase 2 não exigir banco); migrações `V1__extensoes.sql` (`vector`, `hstore`, `uuid-ossp`), `V2__documento.sql` (tabela de `03-architecture.md` §4.1, `hash_conteudo` único, `CHECK` de status e categoria), `V3__vector_store.sql` (`vector(1536)`, índice HNSW `vector_cosine_ops`); Flyway com `coti_owner`, aplicação com `coti_app`.
   Dep.: T005, T009. Verificação: migração aplicada no banco do compose.
 - [ ] **T020** `CON` — `PostgresContainerConfig` (Testcontainers, imagem de T002, `@ServiceConnection`, papéis criados como no compose) e `MigracoesIT`.
   Dep.: T019. Verificação: `MigracoesIT` prova schema criado e que `coti_app` não executa `CREATE TABLE`.

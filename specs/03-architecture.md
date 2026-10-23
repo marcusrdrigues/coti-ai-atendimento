@@ -202,6 +202,7 @@ flowchart TB
 - O domínio não importa Spring, Spring AI, JDBC, MCP nem Jackson.
 - O `DivisorTexto` e o `MontadorContextoRag` são código puro: o primeiro no domínio, o segundo na aplicação (ele conhece o formato do prompt, que é decisão da aplicação, mas não conhece Spring AI).
 - Um teste ArchUnit por serviço garante essas regras.
+- `api.erro` (códigos de erro, `ProblemaFactory`, `EscritorProblema`, identificador de correlação) é a linguagem de erro HTTP comum: a infraestrutura de segurança e de filtros a usa para escrever 401, 403 e 413 no mesmo formato dos controllers. É a única parte de `api` que `infraestrutura` pode acessar (decidido na Fase 2).
 
 ---
 

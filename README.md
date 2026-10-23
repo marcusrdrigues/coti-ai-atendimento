@@ -7,14 +7,14 @@ Plataforma de atendimento inteligente para alunos da COTI Informática, formada 
 
 A especificação completa está em [`specs/`](specs/) (constituição, requisitos, arquitetura, plano, tarefas e contratos). Agentes de codificação seguem o [`AGENTS.md`](AGENTS.md).
 
-> Estado atual: Fase 1 (infraestrutura do banco) concluída. Os serviços Java ainda não foram criados; acompanhe em [`specs/05-tasks.md`](specs/05-tasks.md).
+> Estado atual: Fases 1 e 2 concluídas (banco em Docker e os dois serviços inicializando com segurança, erros padronizados, Actuator e OpenAPI). Endpoints de negócio começam na Fase 3; acompanhe em [`specs/05-tasks.md`](specs/05-tasks.md).
 
 ## Ambiente local
 
 ### Pré-requisitos
 
 - Docker Desktop em execução (`docker info` responde sem erro).
-- JDK 21 (`java -version`). O Maven vem pelo Maven Wrapper, que será criado na Fase 2.
+- JDK 21 (`java -version`). O Maven vem pelo Maven Wrapper (`./mvnw`).
 - Porta `5434` livre no host. Se estiver ocupada, o `docker compose up` falha com "port is already allocated".
 
 ### 1. Configurar as variáveis
@@ -31,7 +31,18 @@ Preencha no `.env` pelo menos as variáveis do banco:
 | `CONHECIMENTO_FLYWAY_USER` / `CONHECIMENTO_FLYWAY_PASSWORD` | Papel dono do schema, usado só pelas migrações (por exemplo `coti_owner`) |
 | `CONHECIMENTO_DB_USER` / `CONHECIMENTO_DB_PASSWORD` | Papel da aplicação, só DML (por exemplo `coti_app`) |
 
-Use senhas fortes e diferentes entre si. O `.env` está no `.gitignore` e **nunca** deve ser versionado. As demais variáveis (`OPENAI_API_KEY` etc.) são necessárias a partir da Fase 2.
+Use senhas fortes e diferentes entre si. O `.env` está no `.gitignore` e **nunca** deve ser versionado.
+
+Para subir as APIs (Fase 2) preencha também:
+
+| Variável | Para quê |
+|---|---|
+| `OPENAI_API_KEY` | Chave da OpenAI (as APIs não chamam a OpenAI antes das Fases 4 e 7, mas a subida exige a variável) |
+| `OPENAI_CHAT_MODEL` | Identificador do modelo de chat, com versão (`api-atendimentos`); será definido pelo eval (T070) |
+| `CONHECIMENTO_ADMIN_API_KEY` | Chave administrativa (`X-Api-Key`) da `api-conhecimento` |
+| `MONITORAMENTO_API_KEY` | Chave (`X-Api-Key`) para métricas e detalhes do health |
+
+Variável definida no shell tem precedência sobre o `.env` no Docker Compose; confira com `echo` se não quiser que uma chave do seu ambiente seja repassada aos contêineres.
 
 ### 2. Subir o banco
 
@@ -76,3 +87,57 @@ docker compose down -v
 | Papel dono | `CONHECIMENTO_FLYWAY_USER`: executa as migrações (DDL) |
 | Papel da aplicação | `CONHECIMENTO_DB_USER`: só `SELECT/INSERT/UPDATE/DELETE`; não cria nem altera objetos |
 | Volume | `coti-pgdata`, montado em `/var/lib/postgresql` (exigência do PostgreSQL 18) |
+
+## Build, testes e execução das APIs
+
+### Compilar e testar (não precisa de Docker nem de internet depois do primeiro download)
+
+```bash
+./mvnw verify
+```
+
+Um serviço apenas:
+
+```bash
+./mvnw -pl api-conhecimento verify
+```
+
+### Subir tudo com Docker
+
+```bash
+docker compose up -d --build
+```
+
+```bash
+docker compose ps
+```
+
+| Serviço | Endereço | Observação |
+|---|---|---|
+| `api-conhecimento` | `http://localhost:8081` | `GET /actuator/health` público; o resto exige chave |
+| `api-atendimentos` | `http://localhost:8082` | `POST /api/atendimentos/perguntar` é público (a partir da Fase 6) |
+| PostgreSQL | `localhost:5434` | somente loopback |
+
+A `api-atendimentos` sobe mesmo com a `api-conhecimento` fora do ar.
+
+### Rodar uma API pelo IDE ou terminal, com Swagger UI
+
+Com as variáveis exportadas no shell (as da tabela acima):
+
+```bash
+./mvnw -pl api-conhecimento spring-boot:run -Dspring-boot.run.profiles=local
+```
+
+No perfil `local`, `/swagger-ui/index.html` e `/v3/api-docs` ficam abertos; nos demais perfis a especificação exige a chave de monitoramento e a Swagger UI fica desligada.
+
+### Conferir rapidamente
+
+```bash
+curl -i http://localhost:8081/actuator/health
+```
+
+```bash
+curl -i http://localhost:8081/api/conhecimentos
+```
+
+A segunda chamada deve devolver `401` no formato Problem Details, com o cabeçalho `X-Correlation-Id`.
