@@ -55,23 +55,23 @@ Legenda: `CON` = `api-conhecimento`, `ATE` = `api-atendimentos`, `INF` = infraes
 
 ## Fase 3 — Persistência e ingestão de conhecimento
 
-- [ ] **T019** `CON` — Dependências `spring-boot-starter-jdbc`, Flyway e PostgreSQL (adiadas da T009, para a Fase 2 não exigir banco); migrações `V1__extensoes.sql` (`vector`, `hstore`, `uuid-ossp`), `V2__documento.sql` (tabela de `03-architecture.md` §4.1, `hash_conteudo` único, `CHECK` de status e categoria), `V3__vector_store.sql` (`vector(1536)`, índice HNSW `vector_cosine_ops`); Flyway com `coti_owner`, aplicação com `coti_app`.
+- [x] **T019** `CON` — Dependências `spring-boot-starter-jdbc`, Flyway e PostgreSQL (adiadas da T009, para a Fase 2 não exigir banco); migrações `V1__extensoes.sql` (`vector`, `hstore`, `uuid-ossp`), `V2__documento.sql` (tabela de `03-architecture.md` §4.1, `hash_conteudo` único, `CHECK` de status e categoria), `V3__vector_store.sql` (`vector(1536)`, índice HNSW `vector_cosine_ops`); Flyway com `coti_owner`, aplicação com `coti_app`.
   Dep.: T005, T009. Verificação: migração aplicada no banco do compose.
-- [ ] **T020** `CON` — `PostgresContainerConfig` (Testcontainers, imagem de T002, `@ServiceConnection`, papéis criados como no compose) e `MigracoesIT`.
+- [x] **T020** `CON` — `PostgresContainerConfig` (Testcontainers, imagem de T002, `@ServiceConnection`, papéis criados como no compose) e `MigracoesIT`.
   Dep.: T019. Verificação: `MigracoesIT` prova schema criado e que `coti_app` não executa `CREATE TABLE`.
-- [ ] **T021** `CON` — Domínio: `Documento`, `StatusDocumento`, `Categoria`, `Pendencia` e exceções `ConhecimentoDuplicadoException`, `DadoPessoalDetectadoException`, `ConhecimentoNaoEncontradoException`.
+- [x] **T021** `CON` — Domínio: `Documento`, `StatusDocumento`, `Categoria`, `Pendencia` e exceções `ConhecimentoDuplicadoException`, `DadoPessoalDetectadoException`, `ConhecimentoNaoEncontradoException`.
   Dep.: T017. Verificação: testes unitários das invariantes (campos obrigatórios, transições de status permitidas).
-- [ ] **T022** `CON` — `NormalizadorTexto` e `HashConteudo` (SHA-256 do texto normalizado).
+- [x] **T022** `CON` — `NormalizadorTexto` e `HashConteudo` (SHA-256 do texto normalizado).
   Dep.: T021. Verificação: `NormalizadorTextoTest` (controle, quebras, espaços; textos equivalentes → mesmo hash).
-- [ ] **T023** `CON` — `AnalisadorConteudoPort` e `AnalisadorConteudoRegex` com padrões configuráveis: CPF com dígito verificador, e-mail, telefone; padrões de injeção e delimitadores do prompt.
+- [x] **T023** `CON` — `AnalisadorConteudoPort` e `AnalisadorConteudoRegex` com padrões configuráveis: CPF com dígito verificador, e-mail, telefone; padrões de injeção e delimitadores do prompt.
   Dep.: T021. Verificação: `AnalisadorConteudoRegexTest` com positivos e negativos (CPF inválido não dispara).
-- [ ] **T024** `CON` — `RepositorioDocumentoPort` e `DocumentoJdbcRepositorio` (`JdbcClient`): salvar, buscar por hash, buscar por id, listar com filtros e paginação, atualizar status.
+- [x] **T024** `CON` — `RepositorioDocumentoPort` e `DocumentoJdbcRepositorio` (`JdbcClient`): salvar, buscar por hash, buscar por id, listar com filtros e paginação, atualizar status.
   Dep.: T020, T021. Verificação: `DocumentoJdbcRepositorioIT`.
-- [ ] **T025** `CON` — `CadastrarConhecimentoService` (caminhos de rejeição): 409 duplicado, 422 dado pessoal sem gravar, `EM_REVISAO` com pendência; caminho feliz grava `PROCESSANDO` e delega a uma porta de indexação ainda sem implementação (concluída em T035).
+- [x] **T025** `CON` — `CadastrarConhecimentoService` (caminhos de rejeição): 409 duplicado, 422 dado pessoal sem gravar, `EM_REVISAO` com pendência; caminho feliz grava `PROCESSANDO` e delega a uma porta de indexação ainda sem implementação (concluída em T035).
   Dep.: T022, T023, T024. Verificação: `CadastrarConhecimentoServiceTest` com dublês.
-- [ ] **T026** `CON` — `ConhecimentoController` `POST /api/conhecimentos` + DTOs `record` com Bean Validation; chave administrativa obrigatória (chave MCP recusada).
+- [x] **T026** `CON` — `ConhecimentoController` `POST /api/conhecimentos` + DTOs `record` com Bean Validation; chave administrativa obrigatória (chave MCP recusada).
   Dep.: T014, T025. Verificação: `ConhecimentoControllerTest`: 400 por regra e campo extra sem eco do valor, 401, 409, 413, 415, 422, 202 com `pendencias`.
-- [ ] **T027** `CON` — `ConsultarConhecimentosService` + `GET /api/conhecimentos` e `GET /api/conhecimentos/{id}` (RF11).
+- [x] **T027** `CON` — `ConsultarConhecimentosService` + `GET /api/conhecimentos` e `GET /api/conhecimentos/{id}` (RF11).
   Dep.: T024, T026. Verificação: `ConsultarConhecimentosIT`: filtros, paginação, `tamanho=101` → 400, listagem sem `conteudo`, detalhe com `pendencias`, 404 e 400 para id inválido.
 
 ## Fase 4 — Chunking e geração de embeddings

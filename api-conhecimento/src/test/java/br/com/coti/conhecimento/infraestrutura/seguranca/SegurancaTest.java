@@ -49,9 +49,8 @@ class SegurancaTest {
 
     @Test
     void deveAutenticarComAChaveAdministrativa() throws Exception {
-        // a rota ainda não existe (404), o que prova que a segurança deixou passar
         mvc.perform(get("/api/conhecimentos").header("X-Api-Key", ChavesTeste.ADMIN))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -70,10 +69,10 @@ class SegurancaTest {
 
     @Test
     void deveIgnorarCsrfEmMetodosQueAlteramEstado() throws Exception {
-        // sem token CSRF: se o CSRF estivesse ativo seria 403; o esperado aqui é 404 (rota inexistente)
+        // sem token CSRF: se o CSRF estivesse ativo seria 403; o esperado é a validação da requisição (415)
         mvc.perform(post("/api/conhecimentos").header("X-Api-Key", ChavesTeste.ADMIN))
-                .andExpect(status().is4xxClientError())
-                .andExpect(jsonPath("$.codigo").value("RECURSO_NAO_ENCONTRADO"));
+                .andExpect(status().isUnsupportedMediaType())
+                .andExpect(jsonPath("$.codigo").value("TIPO_MIDIA_NAO_SUPORTADO"));
     }
 
     @Test

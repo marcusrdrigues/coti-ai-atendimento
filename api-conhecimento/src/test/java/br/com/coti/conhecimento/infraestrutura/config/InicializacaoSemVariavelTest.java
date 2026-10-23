@@ -57,6 +57,13 @@ class InicializacaoSemVariavelTest {
         List<String> argumentos = new ArrayList<>();
         argumentos.add("--server.port=0");
         argumentos.add("--spring.main.banner-mode=off");
+        // O banco não é o assunto deste teste: variáveis falsas e sem migração, para que a falha venha só da variável testada.
+        argumentos.add("--spring.flyway.enabled=false");
+        argumentos.add("--CONHECIMENTO_DB_URL=jdbc:postgresql://localhost:1/inexistente");
+        argumentos.add("--CONHECIMENTO_DB_USER=usuario-falso");
+        argumentos.add("--CONHECIMENTO_DB_PASSWORD=senha-falsa-de-teste");
+        argumentos.add("--CONHECIMENTO_FLYWAY_USER=dono-falso");
+        argumentos.add("--CONHECIMENTO_FLYWAY_PASSWORD=senha-falsa-de-teste");
         return argumentos;
     }
 

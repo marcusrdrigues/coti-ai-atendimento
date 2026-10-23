@@ -36,9 +36,18 @@ services:
     image: coti/api-conhecimento:local
     container_name: coti-api-conhecimento
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY:?defina OPENAI_API_KEY no .env}
       CONHECIMENTO_ADMIN_API_KEY: ${CONHECIMENTO_ADMIN_API_KEY:?defina CONHECIMENTO_ADMIN_API_KEY no .env}
+      # Dentro da rede do Compose o banco é o serviço postgres, porta 5432 (a 5434 é só do host).
+      CONHECIMENTO_DB_URL: jdbc:postgresql://postgres:5432/coti_conhecimento
+      CONHECIMENTO_DB_USER: ${CONHECIMENTO_DB_USER:?defina CONHECIMENTO_DB_USER no .env}
+      CONHECIMENTO_DB_PASSWORD: ${CONHECIMENTO_DB_PASSWORD:?defina CONHECIMENTO_DB_PASSWORD no .env}
+      CONHECIMENTO_FLYWAY_USER: ${CONHECIMENTO_FLYWAY_USER:?defina CONHECIMENTO_FLYWAY_USER no .env}
+      CONHECIMENTO_FLYWAY_PASSWORD: ${CONHECIMENTO_FLYWAY_PASSWORD:?defina CONHECIMENTO_FLYWAY_PASSWORD no .env}
       MONITORAMENTO_API_KEY: ${MONITORAMENTO_API_KEY:?defina MONITORAMENTO_API_KEY no .env}
       OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
       OPENAI_EMBEDDING_DIMENSIONS: ${OPENAI_EMBEDDING_DIMENSIONS:-1536}

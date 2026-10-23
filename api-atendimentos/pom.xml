@@ -22,10 +22,23 @@
         <spring-ai.version>2.0.1</spring-ai.version>
         <springdoc.version>3.1.1</springdoc.version>
         <archunit.version>1.5.1</archunit.version>
+        <!-- Spring AI traz swagger-annotations 2.2.31/2.2.38 e o springdoc 3.1.1 usa swagger-core 2.2.55; sem alinhar, -->
+        <!-- /v3/api-docs falha com NoSuchMethodError (Schema.$dynamicRef). Todas as peças ficam na mesma versão. -->
+        <swagger.version>2.2.55</swagger.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>io.swagger.core.v3</groupId>
+                <artifactId>swagger-annotations</artifactId>
+                <version>${swagger.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.swagger.core.v3</groupId>
+                <artifactId>swagger-annotations-jakarta</artifactId>
+                <version>${swagger.version}</version>
+            </dependency>
             <dependency>
                 <groupId>org.springframework.ai</groupId>
                 <artifactId>spring-ai-bom</artifactId>

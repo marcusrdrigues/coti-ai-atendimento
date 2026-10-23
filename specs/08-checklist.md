@@ -17,7 +17,7 @@ Convenção: só se registra como "passou" um teste que foi executado, com o com
 |---|---|---|---|
 | 1 — Infraestrutura Docker e PostgreSQL/pgvector | **Concluída** | T001–T007 (7/7) | 2026-10-22 |
 | 2 — Estrutura Maven e inicialização dos dois microsserviços | **Concluída** | T008–T018 (11/11) | 2026-10-22 |
-| 3 — Persistência e ingestão de conhecimento | Pendente | T019–T027 | — |
+| 3 — Persistência e ingestão de conhecimento | **Concluída** | T019–T027 (9/9) | 2026-10-23 |
 | 4 — Chunking e geração de embeddings | Pendente | T028–T036 | — |
 | 5 — Busca vetorial e MCP Server | Pendente | T037–T043 | — |
 | 6 — MCP Client e API de Atendimentos | Pendente | T044–T053 | — |
@@ -229,6 +229,103 @@ Nenhum teste Java foi executado nesta fase: ainda não existe código Java (Fase
 #### Próxima fase
 
 **Fase 3 — Persistência e ingestão de conhecimento** (T019–T027). A primeira tarefa é a **T019**: JDBC, Flyway e PostgreSQL com as migrações V1 a V3.
+
+---
+
+### Fase 3 — Persistência e ingestão de conhecimento
+
+**Status:** concluída. **Data:** 2026-10-23. **Tarefas:** T019 a T027 (9 de 9).
+
+#### O que foi entregue
+
+| Tarefa | Resultado |
+|---|---|
+| T019 | `spring-boot-starter-jdbc`, `spring-boot-starter-flyway`, `flyway-database-postgresql` e driver PostgreSQL; migrações `V1__extensoes`, `V2__documento` (CHECKs de status, categoria e trechos; hash único; 3 índices), `V3__vector_store` (`vector(1536)`, HNSW cosseno, índice por `documentoId`); Flyway com o papel dono e a aplicação com o papel de DML |
+| T020 | `PostgresContainerConfig` (Testcontainers com a imagem pgvector 0.8.7-pg18, papéis criados pelo mesmo `01-roles.sh` do Compose, senhas aleatórias por execução) e `MigracoesIT` |
+| T021 | Domínio: `Documento` (invariantes e transições), `StatusDocumento`, `Categoria`, `Pendencia`, `DocumentoResumo`, `FiltroDocumentos`, `Pagina`, `ResultadoAnalise`, `ModeloEmbedding` e exceções |
+| T022 | `NormalizadorTexto` (NFC, LF, sem controles nem caracteres invisíveis, espaços e linhas em branco) e `HashConteudo` (SHA-256) |
+| T023 | `AnalisadorConteudoPort` e `AnalisadorConteudoRegex`: CPF com dígito verificador, e-mail e telefone com listas de permissão, 14 padrões de injeção configuráveis no `application.yml` |
+| T024 | `RepositorioDocumentoPort` e `DocumentoJdbcRepositorio` (`JdbcClient`, parâmetros vinculados) |
+| T025 | `CadastrarConhecimentoService`: normaliza, confere duplicidade, analisa, retém em revisão ou grava `PROCESSANDO`, indexa e publica |
+| T026 | `ConhecimentoController` `POST /api/conhecimentos`, DTOs `record` com Bean Validation, `ManipuladorExcecoesConhecimento` (409, 422, 404, 400, 503) |
+| T027 | `ConsultarConhecimentosService`, `GET /api/conhecimentos` (filtros e paginação) e `GET /api/conhecimentos/{id}` |
+
+#### Arquivos criados
+
+- `api-conhecimento/src/main/resources/db/migration/V1__extensoes.sql`, `V2__documento.sql`, `V3__vector_store.sql`
+- Domínio (`dominio/`): `Categoria`, `Pendencia`, `StatusDocumento`, `Documento`, `DocumentoResumo`, `FiltroDocumentos`, `Pagina`, `ResultadoAnalise`, `ModeloEmbedding`, `NormalizadorTexto`, `HashConteudo`; `dominio/excecao/`: `ConhecimentoDuplicadoException`, `DadoPessoalDetectadoException`, `ConhecimentoNaoEncontradoException`, `IndexacaoFalhouException`, `DadosInvalidosException`
+- Aplicação (`aplicacao/`): `CadastrarConhecimentoService`, `CadastrarConhecimentoComando`, `ConsultarConhecimentosService`; portas `RepositorioDocumentoPort`, `AnalisadorConteudoPort`, `IndexacaoDocumentoPort`
+- Infraestrutura: `persistencia/DocumentoJdbcRepositorio`, `analise/AnalisadorConteudoRegex`, `indexacao/IndexadorNaoImplementado` (provisório), `config/ConhecimentoConfig`
+- API: `api/rest/ConhecimentoController`, `api/rest/ManipuladorExcecoesConhecimento`, DTOs `CadastrarConhecimentoRequest`, `ConhecimentoCadastradoResponse`, `ConhecimentoResumo`, `ConhecimentoDetalheResponse`, `PaginaConhecimentosResponse`
+- Testes: `suporte/PostgresContainerConfig`; `dominio/{DocumentoTest, NormalizadorTextoTest}`; `aplicacao/{RepositorioDocumentoEmMemoria, CadastrarConhecimentoServiceTest, ConsultarConhecimentosServiceTest}`; `infraestrutura/analise/AnalisadorConteudoRegexTest`; `infraestrutura/persistencia/{MigracoesIT, DocumentoJdbcRepositorioIT}`; `api/rest/{ConhecimentoControllerTest, CadastroSemIndexadorIT, ConsultarConhecimentosIT}`
+
+#### Arquivos modificados
+
+- `api-conhecimento/pom.xml`: JDBC, Flyway, PostgreSQL, Testcontainers; Surefire passa a executar também `*IT`; versões do `swagger-annotations` alinhadas (ver decisões)
+- `api-atendimentos/pom.xml`: só o alinhamento do `swagger-annotations`
+- `api-conhecimento/src/main/resources/application.yml`: datasource, Flyway, Hikari, `default-property-inclusion: non_null`, modelo de embedding e padrões de análise
+- `infraestrutura/config/PropriedadesConhecimento`: `Embedding` e `Analise`
+- `suporte/TesteWeb` (agora com o PostgreSQL em Testcontainers), `InicializacaoSemVariavelTest`, `LimiteTamanhoCorpoFilterTest` e `SegurancaTest` (a rota `/api/conhecimentos` agora existe)
+- `docker-compose.yml`: banco e `depends_on` na `api-conhecimento`
+- `README.md`, `specs/03-architecture.md` (nota sobre `PROCESSANDO`), `skills/testing/SKILL.md` (os `*IT` rodam no Surefire), `specs/05-tasks.md` e este arquivo
+
+#### Comandos executados e resultados
+
+| Comando | Resultado |
+|---|---|
+| `./mvnw -B verify` (raiz) | **BUILD SUCCESS**: `api-conhecimento` **237 testes, 0 falhas, 1 ignorado**; `api-atendimentos` 61 testes, 0 falhas, 1 ignorado |
+| `docker compose up -d --build api-conhecimento` (com `env -u OPENAI_API_KEY`) | Contêiner `healthy`; log: "Successfully validated 3 migrations" |
+| Consulta como papel da aplicação no banco do Compose | `flyway_schema_history`: V1, V2, V3 com sucesso; tabelas `documento`, `flyway_schema_history` e `vector_store`, todas do papel dono |
+| `GET /actuator/health` com a chave de monitoramento | componente `db` em `UP` |
+| `POST /api/conhecimentos` com texto de injeção (arquivo UTF-8) | `202` `EM_REVISAO`, `pendencias=["POSSIVEL_PROMPT_INJECTION"]` |
+| mesmo arquivo de novo | `409` `CONHECIMENTO_DUPLICADO` |
+| texto com CPF válido | `422` `DADO_PESSOAL_DETECTADO` (CPF não aparece na resposta nem no log) |
+| cadastro sem pendências | `503` `MODELO_INDISPONIVEL` com `conhecimentoId`; documento fica `ERRO_PROCESSAMENTO` (esperado: indexação só na Fase 4) |
+| `GET /api/conhecimentos?tamanho=101`, id inválido, id inexistente, sem chave | `400`, `400`, `404`, `401` |
+| `grep` nos logs do contêiner por trechos dos documentos e pelo CPF | 0 ocorrências; só metadados (`conhecimentoId`, pendências) |
+| `DELETE FROM documento` pelo papel da aplicação | removeu as 3 linhas de teste do banco local |
+
+#### Testes automatizados (resumo)
+
+| Área | Cobertura |
+|---|---|
+| Migrações (banco real) | histórico Flyway, extensões, `vector(1536)`, HNSW cosseno, colunas e índices; aplicação sem DDL (`42501` em CREATE, ALTER e DROP); DML permitido nas tabelas do dono; dono não é superusuário; aplicação sem acesso ao banco `postgres`; CHECKs de status, categoria e trechos; hash único |
+| Domínio | invariantes do `Documento`, transições de estado, imutabilidade, resumo sem conteúdo, paginação |
+| Normalizador e hash | CRLF, controles, caracteres invisíveis, NFC, espaços, linhas em branco, equivalência de hash, vetor SHA-256 conhecido |
+| Analisador | CPF válido e inválido, e-mail, telefone (com e sem separadores, DDD inválido, números corridos), listas de permissão, 18 textos de injeção e 8 textos comuns que não podem disparar |
+| Casos de uso | cadastro feliz, ordem das chamadas, texto normalizado, conteúdo curto ou grande, duplicidade, dado pessoal antes da injeção, retenção em revisão, falhas de indexação e de marcação de erro; listagem (ordem, filtros, paginação, limites, `PROCESSANDO` oculto) e detalhe |
+| Repositório (banco real) | ida e volta de todos os campos, acentos, pendências, vigência, hash duplicado, atualização de estado, listagem, filtros, paginação, ordem estável, SQL injection nos parâmetros |
+| `POST /api/conhecimentos` | 201 com `Location`, 202, 400 por regra e por campo desconhecido sem eco do valor, 401 (sem chave, errada, de monitoramento), 409, 413, 415, 422 (CPF, e-mail, telefone), 503 com `conhecimentoId` e `Retry-After` |
+| `GET` | filtros e combinações, paginação, `tamanho` 0, -1, 100 e 101, parâmetros malformados, listagem sem `conteudo`, detalhe com e sem pendências, 404, 400 e 401 |
+
+**Teste ignorado (1 por serviço):** a variante "ausente" de `OPENAI_API_KEY` no `InicializacaoSemVariavelTest`, porque a variável existe no ambiente deste computador (igual à Fase 2).
+
+#### Decisões e desvios
+
+- **Indexação provisória.** A porta `IndexacaoDocumentoPort` tem, nesta fase, o adaptador `IndexadorNaoImplementado`, que sempre falha. Um cadastro sem pendências termina em `ERRO_PROCESSAMENTO` com `503`, em vez de parecer publicado sem trechos. É removido na T035. O `CadastroSemIndexadorIT` documenta esse comportamento e deve mudar na Fase 4.
+- **`PROCESSANDO` é invisível na API.** A listagem o omite, o detalhe responde `404` e filtrar por ele devolve `400`. O contrato só tem 3 estados públicos; documentos interrompidos nesse estado serão recolhidos pela T036.
+- **Número corrido não é telefone.** Dez dígitos sem parênteses, `+` nem separadores (como um protocolo) não disparam o detector; o teste manual com um carimbo de data de 10 dígitos mostrou o falso positivo. Celular de 11 dígitos começando por 9 continua sendo detectado.
+- **Padrões de injeção estreitados.** "Você agora é aluno" e "a partir de agora, você pode se matricular" são texto comum de curso e não disparam mais; só "você agora é um assistente/bot/..." e "a partir de agora você deve/vai/precisa...".
+- **Teste com banco real em toda a suíte web.** O `TesteWeb` passou a subir o PostgreSQL em Testcontainers (um contêiner por JVM). Por isso `./mvnw test` da `api-conhecimento` exige o Docker ativo. Usa propriedades dinâmicas e não `@ServiceConnection`, porque a aplicação precisa de dois papéis (Flyway e aplicação).
+- **Surefire executa os `*IT`.** O Failsafe não está configurado, então os `*IT` seriam ignorados em silêncio. O Surefire agora inclui `**/*Test.java` e `**/*IT.java`. A skill `testing` foi corrigida.
+- **Conflito de versões do `swagger-annotations`** (achado pelo teste `OpenApiTest` ao existir o primeiro controller): o Spring AI traz `swagger-annotations` 2.2.31 e `-jakarta` 2.2.38, e o springdoc 3.1.1 usa `swagger-core` 2.2.55. Com isso, `/v3/api-docs` falhava com `NoSuchMethodError: Schema.$dynamicRef()`. As duas peças foram fixadas em 2.2.55 nos dois serviços (alinhamento de versão, não dependência nova).
+- **Hikari em milissegundos.** `connection-timeout: 3s` não é aceito (o valor é `long`); ficou `3000`.
+- **Transação de leitura.** `ConsultarConhecimentosService` usa `@Transactional(readOnly = true)` e por isso não é `final` (o proxy de classe exige). Os demais serviços e adaptadores são `final`; o repositório usa `@Component` (e não `@Repository`) para não ser proxiado.
+- **Pacote `org.springframework.dao` na camada `api`.** O `ManipuladorExcecoesConhecimento` traduz falha de acesso ao banco em `503 BASE_CONHECIMENTO_INDISPONIVEL` com `Retry-After`; a regra do ArchUnit continua passando.
+
+#### Pendências e riscos
+
+- **Detecção de dado pessoal pode bloquear contatos institucionais.** E-mail e telefone da própria COTI num documento institucional dão `422`. As listas `dominios-email-permitidos` e `telefones-permitidos` estão vazias no `application.yml`: falta a COTI informar os canais oficiais (domínio e telefones).
+- **Chave de serviço MCP ainda não existe.** O teste "chave MCP recusada" usa a chave de monitoramento; a cadeia `/mcp` e a variável `CONHECIMENTO_MCP_API_KEY` entram na Fase 5.
+- **Sem `Retry-After` em 429** (limite de requisições é da Fase 8). O 503 de indexação e de banco já devolve `Retry-After: 30`.
+- **Reexecução na Fase 4:** os testes `CadastroSemIndexadorIT` e o `@MockitoBean` de `IndexacaoDocumentoPort` nos testes do controller devem ser revistos quando a indexação real existir.
+- **Dependência de Docker nos testes.** Quem rodar `./mvnw test` sem o Docker ativo vê falha de contexto em toda a suíte web da `api-conhecimento`.
+- **Data/hora da resposta do `POST`** sai com precisão de nanossegundos (relógio do contêiner), enquanto o banco guarda microssegundos; o `GET` devolve microssegundos. Inofensivo.
+- O `.env` local ganhou chaves geradas e a `OPENAI_API_KEY` provisória; continua ignorado pelo git.
+
+#### Próxima fase
+
+**Fase 4 — Chunking e geração de embeddings** (T028–T036). A primeira tarefa é a **T028** (`DivisorTexto` com sobreposição); a **T031** (spike do Spring AI 2.0.1 sobre `metadata`, `delete(Filter.Expression)` e `add()` com id repetido) pode ser feita em seguida, pois precisa do banco já migrado.
 
 ## 2. Checklist de produção (a completar na T072)
 

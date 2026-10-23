@@ -2,9 +2,11 @@ package br.com.coti.conhecimento.infraestrutura.config;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
+import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.validation.annotation.Validated;
@@ -19,6 +21,8 @@ public record PropriedadesConhecimento(
         @Valid @NotNull Seguranca seguranca,
         @Valid @NotNull OpenAi openai,
         @Valid @DefaultValue Web web,
+        @Valid @NotNull Embedding embedding,
+        @Valid @NotNull Analise analise,
         @DefaultValue("false") boolean documentacaoPublica) {
 
     /**
@@ -54,5 +58,19 @@ public record PropriedadesConhecimento(
     }
 
     public record Web(@Positive @DefaultValue("262144") long limiteCorpoBytes) {
+    }
+
+    /** Modelo de embedding gravado em cada documento (o mesmo configurado em {@code spring.ai.openai.embedding}). */
+    public record Embedding(@NotBlank String modelo) {
+    }
+
+    /**
+     * Padrões da análise de conteúdo (RF01). Os de injeção são expressões regulares; e-mails e telefones
+     * institucionais podem ser liberados para não serem tratados como dado pessoal.
+     */
+    public record Analise(
+            @NotEmpty List<@NotBlank String> padroesInjecao,
+            @DefaultValue List<String> dominiosEmailPermitidos,
+            @DefaultValue List<String> telefonesPermitidos) {
     }
 }

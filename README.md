@@ -7,7 +7,7 @@ Plataforma de atendimento inteligente para alunos da COTI Informática, formada 
 
 A especificação completa está em [`specs/`](specs/) (constituição, requisitos, arquitetura, plano, tarefas e contratos). Agentes de codificação seguem o [`AGENTS.md`](AGENTS.md).
 
-> Estado atual: Fases 1 e 2 concluídas (banco em Docker e os dois serviços inicializando com segurança, erros padronizados, Actuator e OpenAPI). Endpoints de negócio começam na Fase 3; acompanhe em [`specs/05-tasks.md`](specs/05-tasks.md).
+> Estado atual: Fases 1 a 3 concluídas (banco em Docker, os dois serviços com segurança, erros padronizados, Actuator e OpenAPI, e o cadastro e a consulta de conhecimentos na `api-conhecimento`). A indexação (chunks e embeddings) chega na Fase 4, então um cadastro sem pendências ainda termina em `503`; acompanhe em [`specs/05-tasks.md`](specs/05-tasks.md).
 
 ## Ambiente local
 
@@ -90,7 +90,9 @@ docker compose down -v
 
 ## Build, testes e execução das APIs
 
-### Compilar e testar (não precisa de Docker nem de internet depois do primeiro download)
+### Compilar e testar (exige o Docker Desktop ativo)
+
+Os testes da `api-conhecimento` sobem o PostgreSQL 18 com pgvector em Testcontainers (a imagem é baixada na primeira vez). Nenhum teste chama a OpenAI.
 
 ```bash
 ./mvnw verify
@@ -114,7 +116,7 @@ docker compose ps
 
 | Serviço | Endereço | Observação |
 |---|---|---|
-| `api-conhecimento` | `http://localhost:8081` | `GET /actuator/health` público; o resto exige chave |
+| `api-conhecimento` | `http://localhost:8081` | `GET /actuator/health` público; `/api/conhecimentos` exige `X-Api-Key`; aplica as migrações do banco ao subir |
 | `api-atendimentos` | `http://localhost:8082` | `POST /api/atendimentos/perguntar` é público (a partir da Fase 6) |
 | PostgreSQL | `localhost:5434` | somente loopback |
 

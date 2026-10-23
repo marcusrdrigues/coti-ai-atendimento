@@ -21,6 +21,8 @@ class LimiteTamanhoCorpoFilterTest {
                     new PropriedadesConhecimento.Seguranca("a", "b"),
                     new PropriedadesConhecimento.OpenAi("c"),
                     new PropriedadesConhecimento.Web(LIMITE),
+                    new PropriedadesConhecimento.Embedding("modelo-de-teste"),
+                    new PropriedadesConhecimento.Analise(java.util.List.of("x"), java.util.List.of(), java.util.List.of()),
                     false),
             new EscritorProblema(JsonMapper.builder().build()));
 

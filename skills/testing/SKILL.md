@@ -40,7 +40,7 @@ Esta skill garante o Artigo 15 e dá evidência aos Artigos 3 a 13 e 16 a 17.
 ### 1. Organização
 
 - Testes unitários: `*Test.java`, executados pelo Surefire (`./mvnw test`).
-- Testes de integração: `*IT.java`, executados pelo Failsafe (`./mvnw verify`).
+- Testes de integração: `*IT.java`. Neste projeto o Surefire executa `*Test` e `*IT` na mesma fase (`./mvnw test` ou `verify`), porque o Failsafe não está configurado; os testes que sobem a aplicação usam Testcontainers e exigem o Docker ativo.
 - Eval: `@Tag("eval")`, excluído por padrão; executado com perfil próprio (por exemplo, `./mvnw verify -Peval`) e chave da OpenAI vinda do ambiente.
 - Casos de eval em `eval/` na raiz de cada serviço, em JSONL versionado: `eval/recuperacao.jsonl`, `eval/resposta.jsonl`, `eval/adversarial.jsonl`.
 - Nome do teste descreve o comportamento: `deveRecusarQuandoNaoHaTrechoAcimaDoLimiar`, `deveRetornar401QuandoChamadaMcpSemCredencial`.

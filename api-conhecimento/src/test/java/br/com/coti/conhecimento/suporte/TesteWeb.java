@@ -7,10 +7,11 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.test.context.ContextConfiguration;
 
 /**
- * Teste da aplicação completa com MockMvc e credenciais falsas. Nenhuma chamada à OpenAI é feita:
- * as chaves existem só para satisfazer a configuração obrigatória.
+ * Teste da aplicação completa com MockMvc, credenciais falsas e PostgreSQL real em Testcontainers (exige o
+ * Docker ativo). Nenhuma chamada à OpenAI é feita: as chaves só satisfazem a configuração obrigatória.
  */
 @Documented
 @Target(ElementType.TYPE)
@@ -20,6 +21,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
         "CONHECIMENTO_ADMIN_API_KEY=" + ChavesTeste.ADMIN,
         "MONITORAMENTO_API_KEY=" + ChavesTeste.MONITORAMENTO
 })
+@ContextConfiguration(initializers = PostgresContainerConfig.class)
 @AutoConfigureMockMvc
 public @interface TesteWeb {
 }

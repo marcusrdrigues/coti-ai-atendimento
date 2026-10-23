@@ -264,7 +264,7 @@ Tabela `documento`:
 | `cadastrado_por` | `varchar(100)` | not null (identificador da credencial) |
 | `cadastrado_em` | `timestamptz` | not null |
 
-`PROCESSANDO` é um status **interno** (dura só durante o cadastro; ver ADR-07). O contrato público expõe `PUBLICADO`, `EM_REVISAO` e `ERRO_PROCESSAMENTO`; se um registro for lido enquanto `PROCESSANDO`, a API o apresenta como `ERRO_PROCESSAMENTO` caso o processo tenha sido interrompido (limpeza na subida, seção 6.4).
+`PROCESSANDO` é um status **interno** (dura só durante o cadastro; ver ADR-07). A API não o expõe: a listagem o omite e o detalhe responde 404 (decidido na Fase 3); documentos interrompidos nesse estado são recolhidos pela limpeza da Fase 4 (T036). O contrato público expõe `PUBLICADO`, `EM_REVISAO` e `ERRO_PROCESSAMENTO`; se um registro for lido enquanto `PROCESSANDO`, a API o apresenta como `ERRO_PROCESSAMENTO` caso o processo tenha sido interrompido (limpeza na subida, seção 6.4).
 
 Metadados JSON de cada linha de `vector_store`:
 
