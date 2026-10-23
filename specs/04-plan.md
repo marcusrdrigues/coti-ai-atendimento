@@ -1,0 +1,439 @@
+# Plano de implementação do MVP — COTI AI Atendimento
+
+Este plano organiza a construção do MVP definido em [`02-requirements.md`](02-requirements.md), seguindo a arquitetura de [`03-architecture.md`](03-architecture.md) e os contratos de [`06-api-contracts.md`](06-api-contracts.md). As tarefas atômicas estão em [`05-tasks.md`](05-tasks.md).
+
+## 1. Regras do plano
+
+- **Teste junto com o código.** Cada fase entrega os testes do que implementa (AGENTS.md, seção 5). A Fase 8 não é "a fase dos testes": ela consolida o que é transversal (limite de requisições, métricas, eval, checklist de produção).
+- **Segurança junto com o endpoint.** Todo endpoint nasce com a autenticação definida no contrato. Nenhuma fase expõe endpoint aberto "para testar depois".
+- **Uma fase só começa** quando as tarefas de que ela depende estão concluídas e com `./mvnw verify` passando.
+- **Itens (conferir)** de `03-architecture.md` são resolvidos na primeira tarefa que os usa, com o resultado registrado na seção 3 deste plano antes de seguir.
+- **Fluxo de cada tarefa:** Spec → Plan → Implement → Test → Review (AGENTS.md, seção 6), com o relatório final da seção 7.
+- **Docker Desktop ativo** é pré-requisito das Fases 1 e de todos os testes de integração a partir da Fase 3.
+
+## 2. Visão das fases
+
+```mermaid
+flowchart LR
+    F1[Fase 1<br/>Docker + PostgreSQL/pgvector] --> F2[Fase 2<br/>Maven + bootstrap]
+    F2 --> F3[Fase 3<br/>Persistência + cadastro]
+    F3 --> F4[Fase 4<br/>Chunking + embeddings]
+    F4 --> F5[Fase 5<br/>Busca vetorial + MCP Server]
+    F2 --> F6a[Fase 6<br/>MCP Client + API Atendimentos]
+    F5 --> F6a
+    F6a --> F7[Fase 7<br/>OpenAI + contexto RAG]
+    F5 --> F8[Fase 8<br/>Segurança, observabilidade, eval]
+    F7 --> F8
+```
+
+| Fase | Serviço | Requisitos | Entrega verificável |
+|---|---|---|---|
+| 1 | infraestrutura | RNF07, RNF09 | PostgreSQL 18 + pgvector no ar em `localhost:5434`, com papéis |
+| 2 | ambos | RNF01–RNF03, RNF05, RNF09 | Dois serviços sobem em 8081/8082 com health, erros padronizados, correlação e OpenAPI |
+| 3 | conhecimento | RF01 (caminhos de rejeição), RF11 | Schema migrado; cadastro com 400/401/409/413/422/202; listagem e detalhe |
+| 4 | conhecimento | RF01 (caminho feliz), RF02, RF03 | Cadastro completo com chunks e embeddings publicados de forma atômica |
+| 5 | conhecimento | RF04, RF05, RF12 | Ferramenta MCP `buscar_conhecimento` e diagnóstico REST devolvendo os mesmos trechos |
+| 6 | atendimentos | RF06, RF07, RF10 (parcial) | `perguntar` responde "sem evidência" e 503 de MCP; health `DEGRADADO` |
+| 7 | atendimentos | RF08, RF09, RF10 | Resposta gerada com fontes derivadas do MCP, validação de saída e prazo |
+| 8 | ambos | RNF01, RNF02, RNF06, RNF08 | Limites, métricas, eval, test plan, checklist e revisão OWASP LLM |
+
+A Fase 6 pode começar logo após a Fase 2 para o que não depende da `api-conhecimento` (domínio, mascaramento, controller), mas só termina depois da Fase 5, porque seus testes de integração precisam do contrato MCP implementado.
+
+## 3. Versões fixadas
+
+Preenchida pela tarefa T006 antes de qualquer `pom.xml`. Nenhum valor abaixo pode ser escrito de memória.
+
+| Item | Versão | Fonte conferida |
+|---|---|---|
+| Spring Boot 4.1.x (patch) | _a definir em T006_ | |
+| Spring AI | 2.0.1 | `03-architecture.md` |
+| springdoc-openapi 3.x | _a definir em T006_ | |
+| ArchUnit | _a definir em T006_ | |
+| WireMock | _a definir em T006_ | |
+| Testcontainers | gerenciada pelo Boot (confirmar pacotes 2.x) | |
+| Imagem PostgreSQL | `pgvector/pgvector:0.8.2-pg18-trixie` (confirmar tag) | |
+| Artefato do MCP Client | _a definir em T006_ | |
+
+---
+
+## Fase 1 — Infraestrutura Docker e PostgreSQL/pgvector
+
+**Objetivo.** Ter um PostgreSQL 18 com pgvector rodando localmente em Docker, na porta 5434 do host, com os papéis `coti_owner` e `coti_app` e o banco `coti_conhecimento`, sem nenhum segredo no repositório.
+
+**Dependências.** Nenhuma. Requer Docker Desktop.
+
+**Arquivos previstos.**
+- `.gitignore` (confirmar `.env`, `target/`, arquivos de IDE)
+- `.env.example`
+- `docker-compose.yml` (serviço `postgres`)
+- `docker/postgres/init/01-roles.sh`
+- `README.md` (seção "Ambiente local")
+
+**Classes esperadas.** Nenhuma.
+
+**Critérios de aceite.**
+- `docker compose up -d postgres` sobe o container saudável (`healthcheck` com `pg_isready`).
+- A porta está ligada a `127.0.0.1:5434`, não a `0.0.0.0`.
+- O banco `coti_conhecimento` existe; `coti_owner` é o dono; `coti_app` conecta e não tem privilégio de DDL.
+- A extensão `vector` está disponível na versão 0.8.2.
+- Senhas vêm do `.env`; `.env` está no `.gitignore`; `.env.example` não tem valores.
+
+**Comandos de validação.**
+
+```bash
+docker compose up -d postgres
+```
+
+```bash
+docker compose ps
+```
+
+```bash
+docker compose exec postgres psql -U coti_app -d coti_conhecimento -c "SELECT name, default_version FROM pg_available_extensions WHERE name = 'vector';"
+```
+
+```bash
+git check-ignore .env
+```
+
+**Riscos técnicos.**
+- Tag da imagem `0.8.2-pg18-trixie` diferente no Docker Hub → conferir antes (T003).
+- Scripts de `docker-entrypoint-initdb.d` só rodam com volume vazio → documentar `docker compose down -v` para recriar.
+- `.sql` não lê variáveis de ambiente → usar `.sh` com `psql` e variáveis.
+- Porta 5434 ocupada na máquina → mensagem clara no README.
+
+---
+
+## Fase 2 — Estrutura Maven e inicialização dos dois microsserviços
+
+**Objetivo.** Criar o monorepo Maven agregador e os dois projetos Spring Boot independentes, subindo em 8081 e 8082, com a base transversal pronta: configuração tipada que falha sem variável obrigatória, correlação, erros Problem Details, segurança negando por padrão, Actuator, logs ECS, OpenAPI, regras de arquitetura e imagens Docker.
+
+**Dependências.** Fase 1 (para o compose completo); T006 (versões fixadas).
+
+**Arquivos previstos.**
+- `pom.xml` (agregador), `mvnw`, `mvnw.cmd`, `.mvn/wrapper/`
+- `api-conhecimento/pom.xml`, `api-atendimentos/pom.xml`
+- `*/src/main/resources/application.yml`, `application-local.yml`
+- `*/Dockerfile`
+- `docker-compose.yml` (acrescenta as duas APIs)
+
+**Classes esperadas** (em cada serviço, pacote `br.com.coti.conhecimento` ou `br.com.coti.atendimentos`).
+- `ApiConhecimentoApplication`, `ApiAtendimentosApplication`
+- `infraestrutura.config`: `PropriedadesConhecimento` / `PropriedadesAtendimentos` (`record` + `@Validated`), `OpenApiConfig`
+- `infraestrutura.observabilidade`: `CorrelacaoFilter`
+- `infraestrutura.seguranca`: `SecurityConfig`, `ApiKeyAuthFilter`, `ComparadorChave` (tempo constante)
+- `api.erro`: `ManipuladorErrosRest`, `CodigoErro`, `ProblemaFactory`
+- Testes: `ArquiteturaTest` (ArchUnit), `CorrelacaoFilterTest`, `ManipuladorErrosRestTest`, `SecurityConfigTest`, `InicializacaoSemVariavelTest`
+
+**Critérios de aceite.**
+- `./mvnw verify` na raiz compila e testa os dois serviços.
+- Cada serviço tem parent `spring-boot-starter-parent` e importa `spring-ai-bom:2.0.1`; a raiz só agrega.
+- `api-conhecimento` sobe em 8081 e `api-atendimentos` em 8082 com o perfil `local`.
+- Sem `OPENAI_API_KEY` (ou outra obrigatória), a subida falha com mensagem que cita o nome da variável.
+- `GET /actuator/health` responde `{"status":"UP"}` sem autenticação; `env`, `configprops`, `beans`, `heapdump` não expostos.
+- Toda resposta tem `X-Correlation-Id`; erros 404/405/415/500 em `application/problem+json` com `codigo`, `correlacaoId`, `timestamp`, sem stack trace.
+- Qualquer rota não pública devolve 401 sem credencial.
+- Logs em JSON ECS no console.
+- `/v3/api-docs` disponível; Swagger UI só no perfil `local`.
+- ArchUnit: `dominio` sem Spring/Spring AI/JDBC/Jackson; `api-atendimentos` sem JDBC, `VectorStore` e `EmbeddingModel`.
+- `docker compose up` sobe as três peças; `api-atendimentos` sobe mesmo sem a `api-conhecimento`.
+
+**Comandos de validação.**
+
+```bash
+./mvnw verify
+```
+
+```bash
+docker compose up -d --build
+```
+
+```bash
+curl -i http://localhost:8081/actuator/health
+```
+
+```bash
+curl -i http://localhost:8082/actuator/health
+```
+
+**Riscos técnicos.**
+- Incompatibilidade de patch entre Spring Boot 4.1.x e Spring AI 2.0.1 → T006 confere na nota oficial.
+- `spring.ai.model.chat: none` / `spring.ai.model.embedding: none` com nome diferente na 2.0 → testar a subida sem o bean indesejado.
+- Autoconfigurações do Spring AI exigindo chave na subida dos testes → testes usam valor falso e dublês; nenhuma chamada real.
+- Mudanças de pacote no Spring Boot 4 (`@WebMvcTest`, `@MockitoBean`) → conferir na primeira classe de teste.
+
+---
+
+## Fase 3 — Persistência e ingestão de conhecimento
+
+**Objetivo.** Criar o schema por migração, o repositório da tabela `documento` e o cadastro de conhecimento até a análise de conteúdo (rejeições e retenção em revisão), além da listagem e do detalhe (RF11). O caminho feliz do cadastro (gerar chunks e publicar) é concluído na Fase 4.
+
+**Dependências.** Fase 2.
+
+**Arquivos previstos.**
+- `api-conhecimento/src/main/resources/db/migration/V1__extensoes.sql`, `V2__documento.sql`, `V3__vector_store.sql`
+- `api-conhecimento/src/test/resources/` (script de papéis para o Testcontainers)
+
+**Classes esperadas.**
+- `dominio`: `Documento`, `StatusDocumento` (`PROCESSANDO`, `PUBLICADO`, `EM_REVISAO`, `ERRO_PROCESSAMENTO`), `Categoria`, `Pendencia`, `NormalizadorTexto`, `HashConteudo`; `excecao.ConhecimentoDuplicadoException`, `DadoPessoalDetectadoException`, `ConhecimentoNaoEncontradoException`
+- `aplicacao`: `CadastrarConhecimentoService`, `ConsultarConhecimentosService`; `porta.RepositorioDocumentoPort`, `porta.AnalisadorConteudoPort`
+- `infraestrutura.persistencia`: `DocumentoJdbcRepositorio`
+- `infraestrutura.analise`: `AnalisadorConteudoRegex`, `PadroesAnaliseProperties`
+- `api.rest`: `ConhecimentoController`; `api.rest.dto`: `CadastrarConhecimentoRequest`, `ConhecimentoCadastradoResponse`, `ConhecimentoResumo`, `ConhecimentoDetalheResponse`, `PaginaConhecimentosResponse`
+- Testes: `PostgresContainerConfig` (Testcontainers compartilhado), `MigracoesIT`, `DocumentoJdbcRepositorioIT`, `NormalizadorTextoTest`, `AnalisadorConteudoRegexTest`, `CadastrarConhecimentoServiceTest`, `ConhecimentoControllerTest`, `ConsultarConhecimentosIT`
+
+**Critérios de aceite.**
+- Flyway aplica V1–V3 com `coti_owner`; a aplicação conecta com `coti_app`; `coti_app` não consegue `CREATE TABLE`.
+- `vector_store` tem `embedding vector(1536)` e índice HNSW `vector_cosine_ops`.
+- `POST /api/conhecimentos`:
+  - 401 sem chave; 401 com a chave MCP;
+  - 400 para cada regra de Bean Validation e campo desconhecido, sem eco do valor;
+  - 413 acima de 256 KB;
+  - 409 para conteúdo repetido (mesmo hash após normalização);
+  - 422 com CPF válido, e-mail ou telefone, sem gravar nada;
+  - 202 `EM_REVISAO` com `pendencias = ["POSSIVEL_PROMPT_INJECTION"]` e `quantidadeChunks = 0`.
+- `GET /api/conhecimentos` com filtros e paginação (400 para `tamanho` 101), sem `conteudo`; `GET /api/conhecimentos/{id}` com `conteudo` e `pendencias`; 404 `CONHECIMENTO_NAO_ENCONTRADO`; 400 para id não UUID.
+- Nenhum log contém o conteúdo do documento.
+
+**Comandos de validação.**
+
+```bash
+./mvnw -pl api-conhecimento verify
+```
+
+**Riscos técnicos.**
+- Testcontainers precisa criar os mesmos papéis do compose → script de init reutilizado no teste.
+- Falsos positivos do analisador (telefone da própria COTI em documento institucional) → padrões configuráveis; a regra de dado pessoal mira dados de pessoas físicas, e a lista inicial é revisada no eval.
+- Pacote do `PostgreSQLContainer` na linha 2.x do Testcontainers → conferir.
+
+---
+
+## Fase 4 — Chunking e geração de embeddings
+
+**Objetivo.** Completar o cadastro: dividir o texto com sobreposição, gerar embeddings com `text-embedding-3-small` (1536), gravar no `vector_store` e publicar de forma atômica (ADR-07), com compensação em falha e limpeza na subida.
+
+**Dependências.** Fase 3.
+
+**Arquivos previstos.** Apenas classes e testes; nenhuma migração nova.
+
+**Classes esperadas.**
+- `dominio`: `DivisorTexto`, `ConfiguracaoDivisao`, `Trecho`, `IdTrecho` (UUID v5), `VigenciaMetadado` (inteiro `AAAAMMDD`, `99991231`); `excecao.DocumentoGrandeDemaisException`, `ModeloIndisponivelException`
+- `aplicacao`: `CadastrarConhecimentoService` (caminho feliz e compensação), `LimpezaDocumentosInterrompidos`; `porta.RepositorioVetorialPort`, `porta.PublicacaoPort`
+- `infraestrutura.vetorial`: `PgVectorRepositorioAdapter`, `MetadadosTrecho`, `PublicacaoJdbcAdapter`
+- `infraestrutura.resiliencia`: `PoliticaNovasTentativas` (backoff exponencial com variação)
+- Testes: `DivisorTextoTest`, `IdTrechoTest`, `EmbeddingModelFalso` (`@TestConfiguration`), `PgVectorRepositorioAdapterIT`, `PublicacaoAtomicaIT`, `CadastroCompletoIT`, `LimpezaDocumentosInterrompidosIT`, `PoliticaNovasTentativasTest`
+
+**Critérios de aceite.**
+- Divisor: nenhum trecho acima de 1.500; sobreposição de até 200 entre vizinhos; corte em fim de frase quando possível; texto curto em um trecho; mesmos trechos e ids para a mesma entrada; mais de 500 trechos → exceção; `sobreposicao >= tamanhoMaximo` recusado na subida; texto sem espaços não entra em laço.
+- Cadastro válido → 201 `PUBLICADO`, `quantidadeChunks > 0`, `modeloEmbedding = text-embedding-3-small`.
+- Cada linha do `vector_store` tem `documentoId`, `titulo`, `fonte`, `categoria`, `ordem`, `status`, `modeloEmbedding`, `vigenteAte` (inteiro), `cadastradoEm`.
+- Durante a gravação, os chunks ficam `PROCESSANDO`; após a publicação, chunks e documento ficam `PUBLICADO` na mesma transação.
+- Falha definitiva no segundo lote → nenhum chunk do documento permanece; documento `ERRO_PROCESSAMENTO`; resposta 503 `MODELO_INDISPONIVEL` com `conhecimentoId`.
+- 429 seguido de sucesso → publicado; 401 → sem nova tentativa e com alerta de configuração no log, sem a chave.
+- Documento `PROCESSANDO` há mais de 10 minutos é limpo na subida.
+- Nenhum teste chama a OpenAI real.
+
+**Comandos de validação.**
+
+```bash
+./mvnw -pl api-conhecimento verify
+```
+
+```bash
+./mvnw -pl api-conhecimento test -Dtest=DivisorTextoTest
+```
+
+**Riscos técnicos.**
+- Tipo da coluna `metadata` (`json`) e o `jsonb_set` com conversão → validar em `PublicacaoAtomicaIT` (item conferir).
+- Assinatura de `vectorStore.delete(Filter.Expression)` na 2.0.1 → conferir.
+- O `PgVectorStore` gera embeddings dentro do `add()`; o retry precisa envolver o `add()` do lote inteiro sem duplicar linhas → ids determinísticos tornam a regravação idempotente (conferir comportamento de conflito de id).
+- Recursos de retry do Spring Framework 7 → conferir; se não respeitarem o `Prazo`, usar a `PoliticaNovasTentativas` própria.
+
+---
+
+## Fase 5 — Busca vetorial e MCP Server
+
+**Objetivo.** Implementar a busca semântica (RF04) como um único caso de uso, exposto pela ferramenta MCP `buscar_conhecimento` sobre Streamable HTTP (RF05) e pelo endpoint administrativo de diagnóstico (RF12), com autenticação própria para `/mcp`.
+
+**Dependências.** Fase 4.
+
+**Arquivos previstos.** Configuração do MCP Server em `application.yml`.
+
+**Classes esperadas.**
+- `dominio`: `TrechoEncontrado`, `LimitesBusca`; `excecao.ArgumentosInvalidosException`, `BaseConhecimentoIndisponivelException`
+- `aplicacao`: `BuscarConhecimentoService`
+- `api.mcp`: `BuscarConhecimentoTool` (`@McpTool`), `ResultadoBusca`, `TrechoResultado`, `ErroFerramenta`
+- `api.rest`: `DiagnosticoBuscaController`; `api.rest.dto`: `BuscaDiagnosticoRequest`, `BuscaDiagnosticoResponse`
+- `infraestrutura.seguranca`: cadeia de filtros para `/mcp/**` (Bearer `CONHECIMENTO_MCP_API_KEY`)
+- Testes: `BuscarConhecimentoServiceTest`, `BuscaVetorialIT`, `ScoreCossenoIT` (spike), `BuscarConhecimentoToolContratoIT`, `SegurancaMcpIT`, `DiagnosticoBuscaControllerTest`, `DiagnosticoIgualMcpIT`
+
+**Critérios de aceite.**
+- Busca aplica dentro da consulta: `PUBLICADO`, modelo atual, `vigenteAte >= hoje`, `topK = limite`, limiar 0,70; ordena por similaridade; corta 2.000 por trecho e 8.000 no total.
+- `EM_REVISAO`, `PROCESSANDO`, vencido e modelo diferente nunca aparecem.
+- `tools/list` mostra `buscar_conhecimento` com `inputSchema` (`pergunta`, `limite`) e `outputSchema` (`trechos`, `total`) do contrato; anotações `readOnlyHint=true`, `destructiveHint=false`.
+- `tools/call` válido → `structuredContent` com `id`, `texto`, `documentoId`, `titulo`, `fonte`, `categoria`, `similaridade`; sem `limite` → no máximo 5.
+- Argumentos inválidos → `isError=true` com `ErroFerramenta` `ARGUMENTOS_INVALIDOS`; banco indisponível → `BASE_CONHECIMENTO_INDISPONIVEL`; nada de detalhe interno.
+- `/mcp` sem credencial, com chave errada ou com a chave administrativa → HTTP 401.
+- Diagnóstico e MCP devolvem os mesmos trechos e similaridades para a mesma pergunta; diagnóstico exige chave administrativa.
+
+**Comandos de validação.**
+
+```bash
+./mvnw -pl api-conhecimento verify
+```
+
+**Riscos técnicos.**
+- Score do `PgVectorStore` com distância cosseno pode não ser `1 - distância` → `ScoreCossenoIT` antes de fixar o limiar.
+- HNSW com filtro pode devolver menos de `k` resultados → medir; avaliar `hnsw.iterative_scan` só com evidência.
+- `@McpTool` pode não gerar `minLength`/`maximum`/`default` no `inputSchema` → registrar a diferença no teste de contrato; validação em código continua.
+- Formato do texto de erro gerado pelo Spring AI a partir da exceção → garantir o JSON `ErroFerramenta` com teste.
+- Embedding da pergunta com timeout de 5 s aplicado pela aplicação → testar com `EmbeddingModelFalso` lento.
+
+---
+
+## Fase 6 — MCP Client e API de Atendimentos
+
+**Objetivo.** Implementar a `api-atendimentos` até a busca: receber a pergunta, mascarar dados pessoais, chamar `buscar_conhecimento` de forma determinística, validar o resultado, responder "sem evidência" quando não houver trechos e mapear falhas do MCP para 503. O gerador de resposta é só uma porta nesta fase.
+
+**Dependências.** Fase 2 (início), Fase 5 (conclusão dos testes de integração).
+
+**Arquivos previstos.** Configuração do MCP Client em `application.yml`.
+
+**Classes esperadas.**
+- `dominio`: `PerguntaAluno`, `TrechoConhecimento`, `Fonte`, `ResultadoAtendimento`, `Prazo`; `excecao.BaseConhecimentoIndisponivelException`, `TempoEsgotadoException`
+- `aplicacao`: `ResponderPerguntaService` (versão sem modelo); `porta.BaseConhecimentoPort`, `porta.GeradorRespostaPort`, `porta.MascaradorPort`
+- `infraestrutura.privacidade`: `MascaradorDadosPessoaisRegex`
+- `infraestrutura.mcp`: `BaseConhecimentoMcpAdapter`, `McpCabecalhosCustomizer`, `ValidadorResultadoBusca`, `ConhecimentoMcpHealthIndicator`
+- `api.rest`: `AtendimentoController`; `api.rest.dto`: `PerguntarRequest`, `RespostaAtendimentoResponse`, `FonteResponse`
+- Testes: `PrazoTest`, `MascaradorDadosPessoaisRegexTest`, `ValidadorResultadoBuscaTest`, `ServidorMcpDeTeste` (servidor MCP mínimo em teste), `BaseConhecimentoMcpAdapterIT`, `ResponderPerguntaServiceTest`, `AtendimentoControllerTest`, `HealthDegradadoIT`, `SubidaSemConhecimentoIT`
+
+**Critérios de aceite.**
+- `POST /api/atendimentos/perguntar` valida 3–1.000 caracteres e rejeita campos extras (400), sem chamar o MCP.
+- CPF, e-mail e telefone mascarados antes do MCP e do log.
+- Toda pergunta válida chama `buscar_conhecimento` pelo código, com `Bearer` e `traceparent`; `toolcallback.enabled=false`.
+- Resultado fora do schema, `isError=true`, 401/403, timeout (até 2 novas tentativas) → 503 `BASE_CONHECIMENTO_INDISPONIVEL` com `Retry-After`.
+- `trechos` vazio → 200 com `conhecimentoSuficiente=false`, `fontes=[]` e mensagem configurada; o gerador não é chamado.
+- Health: `api-conhecimento` fora → status agregado `DEGRADADO` com HTTP 200; `liveness` e `readiness` `UP`.
+- O serviço sobe com a `api-conhecimento` desligada.
+- Prazo total de 30 s interrompe novas tentativas → 503 `TEMPO_ESGOTADO`.
+
+**Comandos de validação.**
+
+```bash
+./mvnw -pl api-atendimentos verify
+```
+
+**Riscos técnicos.**
+- Nome do starter do MCP Client e forma de injetar cabeçalhos no transporte → spike T043.
+- `initialized: true` pode fazer a subida falhar sem o servidor → testar; se falhar, inicialização preguiçosa no adaptador.
+- Status customizado `DEGRADADO` no Actuator → conferir propriedades `status.order` e `http-mapping`.
+- Servidor MCP de teste precisa seguir o mesmo contrato → gerar a partir dos mesmos `record`s de exemplo do contrato, não do código da `api-conhecimento` (os serviços não compartilham código).
+
+---
+
+## Fase 7 — Integração com OpenAI e montagem do contexto RAG
+
+**Objetivo.** Completar o fluxo B: montar o contexto (filtro, sanitização, limites, rótulos `T<n>`), gerar a resposta com o `ChatClient` sem ferramentas e com saída estruturada, validar a saída, derivar as fontes do resultado MCP e tratar todas as falhas do modelo.
+
+**Dependências.** Fase 6.
+
+**Arquivos previstos.**
+- `api-atendimentos/src/main/resources/prompts/responder-pergunta.system.v1.st`
+- `api-atendimentos/src/main/resources/prompts/responder-pergunta.user.v1.st`
+
+**Classes esperadas.**
+- `dominio`: `ContextoRag`, `ReferenciaTrecho`, `RespostaGerada`; `excecao.ModeloIndisponivelException`, `SaidaModeloInvalidaException`
+- `aplicacao`: `MontadorContextoRag`, `ValidadorRespostaModelo`, `DerivadorFontes`, `ResponderPerguntaService` (completo)
+- `infraestrutura.ia`: `OpenAiGeradorRespostaAdapter`, `RespostaModelo` (`record`), `ChatClientConfig`
+- Testes: `MontadorContextoRagTest`, `ValidadorRespostaModeloTest`, `DerivadorFontesTest`, `ResponderPerguntaServiceTest` (completo), `OpenAiGeradorRespostaAdapterIT` (WireMock), `AtendimentoFimAFimIT` (servidor MCP de teste + WireMock), `PromptInjectionIT`
+
+**Critérios de aceite.**
+- Montador: descarta abaixo de 0,70; `similaridade` nula vai para o fim; neutraliza `<trechos>`, `</trechos>`, `<trecho`, `</trecho>`, `<pergunta>`, `</pergunta>`; escapa aspas em atributos; 2.000 por trecho, 8.000 no total, máximo 5, remove inteiros os de menor similaridade; rótulos `T1..Tn`.
+- `ChatClient` sem ferramentas, temperatura 0, `max-tokens` 600, saída estruturada nativa `RespostaModelo(resposta, conhecimentoSuficiente, referencias)`; modelo vindo de `OPENAI_CHAT_MODEL`.
+- Validador reprova: referência inexistente; `conhecimentoSuficiente=true` sem referência; valor monetário, data, horário, número de vagas ou condição comercial ausentes dos trechos referenciados. Até 2 novas tentativas com o motivo; depois, "sem evidência".
+- Fontes copiadas do resultado MCP (`id`, `documentoId`, `titulo`, `fonte`, `categoria`, `similaridade`), sem repetição, ordenadas; nada vindo do texto do modelo; rótulos `T<n>` não aparecem na resposta.
+- `conhecimentoSuficiente=false` do modelo → mensagem de recusa configurada, `fontes=[]`.
+- OpenAI: timeout/429/5xx → 1 nova tentativa e 503 `MODELO_INDISPONIVEL`; 400/401/403 → sem nova tentativa, 503.
+- Trecho com instrução maliciosa ou delimitador forjado não altera a estrutura do prompt nem o formato da resposta.
+- Resposta não expõe prompt, modelo, tokens nem texto integral dos trechos.
+
+**Comandos de validação.**
+
+```bash
+./mvnw -pl api-atendimentos verify
+```
+
+**Riscos técnicos.**
+- Saída estruturada nativa da OpenAI exige schema estrito; `List<String>` e campos obrigatórios devem gerar schema aceito → validar no WireMock com a forma da requisição.
+- Validador de valores/datas por regex pode gerar falso positivo (ex.: "2 anos de experiência") → casos de teste com textos reais da COTI; regra só para padrões monetários, datas, horários, "vagas".
+- Identificador do modelo de chat ainda não escolhido → testes usam valor fictício; escolha real na Fase 8 pelo eval.
+- Propriedade para desligar o conteúdo de prompt nas observações do Spring AI → conferir.
+
+---
+
+## Fase 8 — Testes, segurança e observabilidade
+
+**Objetivo.** Fechar o que é transversal: limite de requisições, acesso restrito a métricas, métricas de negócio, verificação de logs e trace entre serviços, eval com documentos reais, escolha do modelo de chat, plano de testes, checklist de produção e revisão OWASP LLM.
+
+**Dependências.** Fases 5 e 7.
+
+**Arquivos previstos.**
+- `api-conhecimento/eval/recuperacao.jsonl`
+- `api-atendimentos/eval/resposta.jsonl`, `api-atendimentos/eval/adversarial.jsonl`
+- `specs/07-test-plan.md`, `specs/08-checklist.md`
+- `docs/owasp-llm-revisao.md` (ou seção no checklist)
+- Configuração do verificador de segredos (após aprovação)
+- `scripts/smoke-local.sh`
+
+**Classes esperadas.**
+- `infraestrutura.seguranca`: `LimiteRequisicoesFilter`, `BaldeTokens` (nos dois serviços)
+- `infraestrutura.observabilidade`: `MetricasAtendimento`, `MetricasConhecimento`
+- Testes: `LimiteRequisicoesFilterTest`, `LimiteRequisicoesIT`, `ActuatorAcessoIT`, `MetricasAtendimentoIT`, `LogsSemDadoSensivelIT`, `PropagacaoTraceIT`
+- Eval: `ExecutorEvalRecuperacao`, `ExecutorEvalResposta` (`@Tag("eval")`, perfil `eval`)
+
+**Critérios de aceite.**
+- 429 com `Retry-After`: `perguntar` 10/min por IP; cadastro 30/min e diagnóstico 10/min por credencial.
+- `/actuator/metrics` e `/actuator/prometheus` só com `MONITORAMENTO_API_KEY`; detalhes do health só autenticado.
+- Métricas `coti.atendimento.resultado`, `coti.atendimento.etapa.duracao`, `coti.atendimento.saida_reprovada`, `coti.conhecimento.cadastro`, com tags de versão de prompt e modelo.
+- Teste de captura de log prova que pergunta, CPF, texto de trecho e chaves não aparecem.
+- O `traceparent` enviado pela `api-atendimentos` chega à `api-conhecimento` e o mesmo trace id aparece nos logs das duas.
+- Eval com cerca de 20 casos de recuperação, 20 de resposta e 10+ adversariais, vindos de documentos reais da COTI; notas mínimas definidas em `07-test-plan.md`; 100% de recusa para preço, data, horário e vaga inexistentes.
+- `OPENAI_CHAT_MODEL` escolhido pelo eval (menor modelo que passa), registrado com versão.
+- `07-test-plan.md` com matriz critério de aceite → teste/eval completa; `08-checklist.md` com os itens da seção 11.2 da arquitetura e LGPD.
+- Revisão OWASP Top 10 para LLM com evidência por item; nenhum "não atende" sem plano.
+- `scripts/smoke-local.sh` cadastra um documento e faz uma pergunta pelo compose, mostrando resposta com fonte.
+
+**Comandos de validação.**
+
+```bash
+./mvnw verify
+```
+
+```bash
+./mvnw -pl api-atendimentos verify -Peval
+```
+
+```bash
+docker compose up -d --build
+```
+
+```bash
+bash scripts/smoke-local.sh
+```
+
+**Riscos técnicos.**
+- **Conteúdo real da COTI**: eval e smoke dependem de documentos oficiais (cursos, modalidades, pré-requisitos). Sem eles, o eval mede material inventado. Precisa ser fornecido pela COTI antes desta fase.
+- Eval e smoke usam a OpenAI real → custo e envio de dados: só documentos públicos e perguntas sem dado pessoal até o item LGPD do checklist estar resolvido.
+- Limite em memória não vale com várias instâncias → registrado como item pré-rede.
+- Verificador de segredos (por exemplo, gitleaks) é ferramenta nova → exige aprovação.
+
+---
+
+## 4. Definição de pronto (vale para toda tarefa)
+
+- Critérios de aceite da tarefa atendidos e cobertos por teste.
+- `./mvnw -pl <serviço> verify` executado com Docker ativo e passando; saída real no relatório.
+- Nenhuma violação da constituição, do contrato ou das fronteiras entre serviços.
+- Nenhum segredo, nenhum log com dado sensível.
+- Itens (conferir) usados pela tarefa resolvidos e registrados.
+- Relatório da seção 7 do AGENTS.md entregue.
