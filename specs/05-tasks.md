@@ -13,19 +13,19 @@ Legenda: `CON` = `api-conhecimento`, `ATE` = `api-atendimentos`, `INF` = infraes
 
 ## Fase 1 — Infraestrutura Docker e PostgreSQL/pgvector
 
-- [ ] **T001** `INF` — Revisar `.gitignore` (incluir `.env`, `target/`, `.idea/`, `*.iml`, `.vscode/`) e criar `.env.example` com todas as variáveis de `03-architecture.md` §5.1, sem valores.
+- [x] **T001** `INF` — Revisar `.gitignore` (incluir `.env`, `target/`, `.idea/`, `*.iml`, `.vscode/`) e criar `.env.example` com todas as variáveis de `03-architecture.md` §5.1, sem valores.
   Dep.: —. Verificação: `git check-ignore .env` retorna `.env`; `.env.example` sem nenhum valor preenchido.
-- [ ] **T002** `INF` **(spike)** — Conferir no Docker Hub a tag `pgvector/pgvector:0.8.2-pg18-trixie` (ou a tag pg18 com pgvector 0.8.x vigente) e registrar em `04-plan.md` §3.
+- [x] **T002** `INF` **(spike)** — Conferir no Docker Hub a tag `pgvector/pgvector:0.8.2-pg18-trixie` (ou a tag pg18 com pgvector 0.8.x vigente) e registrar em `04-plan.md` §3.
   Dep.: —. Verificação: tag registrada com link da fonte.
-- [ ] **T003** `INF` — Criar `docker/postgres/init/01-roles.sh`: banco `coti_conhecimento`, papéis `coti_owner` (dono) e `coti_app` (DML sem DDL), senhas lidas do ambiente.
+- [x] **T003** `INF` — Criar `docker/postgres/init/01-roles.sh`: banco `coti_conhecimento`, papéis `coti_owner` (dono) e `coti_app` (DML sem DDL), senhas lidas do ambiente.
   Dep.: T001. Verificação: revisão do script (sem senha literal).
-- [ ] **T004** `INF` — Criar `docker-compose.yml` com o serviço `postgres` (imagem de T002, `127.0.0.1:5434:5432`, volume nomeado, `healthcheck` com `pg_isready`, init de T003).
+- [x] **T004** `INF` — Criar `docker-compose.yml` com o serviço `postgres` (imagem de T002, `127.0.0.1:5434:5432`, volume nomeado, `healthcheck` com `pg_isready`, init de T003).
   Dep.: T002, T003. Verificação: `docker compose up -d postgres` e `docker compose ps` mostram `healthy`.
-- [ ] **T005** `INF` — Validar papéis e extensão: `coti_app` conecta e não cria tabela; extensão `vector` 0.8.2 disponível.
+- [x] **T005** `INF` — Validar papéis e extensão: `coti_app` conecta e não cria tabela; extensão `vector` 0.8.7 disponível.
   Dep.: T004. Verificação: comandos `psql` da Fase 1 do plano com a saída no relatório.
-- [ ] **T006** `INF` **(spike)** — Conferir e registrar em `04-plan.md` §3: patch do Spring Boot 4.1.x compatível com Spring AI 2.0.1; versões de springdoc 3.x, ArchUnit e WireMock; pacotes do Testcontainers na linha usada pelo Boot; nome do starter do MCP Client com Streamable HTTP.
+- [x] **T006** `INF` **(spike)** — Conferir e registrar em `04-plan.md` §3: patch do Spring Boot 4.1.x compatível com Spring AI 2.0.1; versões de springdoc 3.x, ArchUnit e WireMock; pacotes do Testcontainers na linha usada pelo Boot; nome do starter do MCP Client com Streamable HTTP.
   Dep.: —. Verificação: tabela §3 preenchida, cada linha com fonte oficial.
-- [ ] **T007** `INF` — Seção "Ambiente local" no `README.md`: pré-requisitos (Docker Desktop, JDK 21), `.env` a partir do `.env.example`, subir o banco, recriar com `docker compose down -v`.
+- [x] **T007** `INF` — Seção "Ambiente local" no `README.md`: pré-requisitos (Docker Desktop, JDK 21), `.env` a partir do `.env.example`, subir o banco, recriar com `docker compose down -v`.
   Dep.: T005. Verificação: seguir o README do zero sobe o banco.
 
 ## Fase 2 — Estrutura Maven e inicialização dos dois microsserviços

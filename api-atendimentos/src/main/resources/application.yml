@@ -1,0 +1,67 @@
+# api-atendimentos. Credenciais vêm de variáveis de ambiente (sem valor padrão = a subida falha, citando a variável).
+server:
+  port: 8082
+  error:
+    include-stacktrace: never
+    include-message: never
+    include-binding-errors: never
+    include-exception: false
+
+spring:
+  application:
+    name: api-atendimentos
+  threads:
+    virtual:
+      enabled: true
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+  ai:
+    model:
+      embedding: none # Artigo 6: embeddings só existem na api-conhecimento
+    openai:
+      api-key: ${OPENAI_API_KEY}
+      timeout: ${OPENAI_TIMEOUT:20s}
+      max-retries: 0 # novas tentativas ficam na aplicação, em um único ponto (ADR-13)
+      chat:
+        model: ${OPENAI_CHAT_MODEL} # identificador com versão, sem padrão (ADR-15)
+        temperature: 0.0 # fidelidade ao trecho, sem criatividade
+        max-tokens: 600 # teto de custo por resposta
+
+coti:
+  atendimentos:
+    seguranca:
+      monitoramento-api-key: ${MONITORAMENTO_API_KEY}
+    openai:
+      api-key: ${OPENAI_API_KEY} # só validação de presença; o Spring AI lê spring.ai.openai.api-key
+      chat-model: ${OPENAI_CHAT_MODEL}
+    web:
+      limite-corpo-bytes: 262144 # 256 KB
+    documentacao-publica: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+      show-components: when-authorized
+      roles: MONITORAMENTO
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: false
+
+logging:
+  structured:
+    format:
+      console: ecs
+    ecs:
+      service:
+        name: api-atendimentos

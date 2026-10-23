@@ -55,8 +55,8 @@ flowchart LR
 | Java | 21 (LTS) | Virtual threads habilitadas (`spring.threads.virtual.enabled=true`) |
 | Spring Boot | **4.1.x** | Spring AI 2.0 suporta 4.0.x e 4.1.x; 4.1 alinha com springdoc 3.1. Patch exato fixado em `04-plan.md` **(conferir** na nota de lançamento do Spring AI 2.0.1) |
 | Spring AI | **2.0.1** | Via `spring-ai-bom` |
-| PostgreSQL | **18** | Imagem `pgvector/pgvector:0.8.2-pg18-trixie` **(conferir** tag no Docker Hub). Se o PostgreSQL 19 já estiver GA, o 18 continua sendo a escolha conservadora do MVP |
-| pgvector | 0.8.2 | Fixado pela tag da imagem |
+| PostgreSQL | **18** | Imagem `pgvector/pgvector:0.8.7-pg18-trixie` **(conferir** tag no Docker Hub). Se o PostgreSQL 19 já estiver GA, o 18 continua sendo a escolha conservadora do MVP |
+| pgvector | 0.8.7 | Fixado pela tag da imagem |
 | Maven | 3.9.x via Maven Wrapper | `./mvnw` na raiz |
 | Flyway | linha compatível com Boot 4.1 | Dependência gerenciada pelo Boot; aprovada em 2026-10-22 |
 | springdoc-openapi | 3.x (compatível com Boot 4.1) | Aprovada em 2026-10-22 |
@@ -212,7 +212,7 @@ flowchart LR
     subgraph host[Máquina do desenvolvedor]
         browser[Swagger UI / curl]
         subgraph compose[docker compose — rede coti-net]
-            pgc[(postgres<br/>pgvector/pgvector:0.8.2-pg18-trixie)]
+            pgc[(postgres<br/>pgvector/pgvector:0.8.7-pg18-trixie)]
             kc[api-conhecimento]
             ac[api-atendimentos]
         end
@@ -226,7 +226,7 @@ flowchart LR
 
 | Serviço compose | Imagem | Porta no host | Observações |
 |---|---|---|---|
-| `postgres` | `pgvector/pgvector:0.8.2-pg18-trixie` | `127.0.0.1:5434` → 5432 | Volume nomeado; `healthcheck` com `pg_isready`; senhas via `.env` |
+| `postgres` | `pgvector/pgvector:0.8.7-pg18-trixie` | `127.0.0.1:5434` → 5432 | Volume nomeado; `healthcheck` com `pg_isready`; senhas via `.env` |
 | `api-conhecimento` | build local | `127.0.0.1:8081` | `depends_on: postgres (healthy)` |
 | `api-atendimentos` | build local | `127.0.0.1:8082` | Não depende de saúde da `api-conhecimento` (sobe mesmo sem ela — RNF07) |
 
@@ -695,7 +695,7 @@ Nenhum destes itens é exigido para rodar localmente, mas **todos** são obrigat
 |---|---|---|
 | ADR-01 | Monorepo Maven com raiz **só agregadora**; cada serviço com parent `spring-boot-starter-parent` e BOM do Spring AI | Parent comum na raiz: centraliza versões, mas acopla os ciclos de vida e convida a compartilhar código, contra o Artigo 3 |
 | ADR-02 | Spring Boot **4.1.x** + Spring AI 2.0.1 + Java 21 com virtual threads | Boot 4.0.x: também suportado, mas o 4.1 alinha com springdoc 3.1 e recebe correções por mais tempo. WebFlux: desnecessário; virtual threads cobrem a espera de I/O com código síncrono mais simples |
-| ADR-03 | PostgreSQL 18 + pgvector 0.8.2 em imagem com tag fixa; host 5434; Flyway; papéis `coti_owner`/`coti_app` | `initialize-schema=true` do Spring AI: cria schema em tempo de execução sem versionamento e exige DDL no usuário da aplicação |
+| ADR-03 | PostgreSQL 18 + pgvector 0.8.7 em imagem com tag fixa; host 5434; Flyway; papéis `coti_owner`/`coti_app` | `initialize-schema=true` do Spring AI: cria schema em tempo de execução sem versionamento e exige DDL no usuário da aplicação |
 | ADR-04 | `text-embedding-3-small`, 1536 dimensões, distância cosseno, índice HNSW | `text-embedding-3-large`: mais caro e com 3072 dimensões, acima do limite de 2.000 do índice HNSW do pgvector; IVFFlat: exige dados para treinar o índice e tem recall pior na mesma velocidade |
 | ADR-05 | MCP sobre **Streamable HTTP** (`protocol: STREAMABLE`), endpoint `/mcp` | SSE: depreciado no Spring AI 2.0. `STATELESS`: também Streamable HTTP, mais simples de escalar; fica como opção quando houver mais de uma instância, pois a ferramenta não guarda estado |
 | ADR-06 | **Invocação MCP determinística**: o `ResponderPerguntaService` chama `buscar_conhecimento` em toda pergunta, antes do modelo; `toolcallback.enabled=false`; `ChatClient` sem tools | Ferramenta registrada no `ChatClient` para o modelo decidir: chamada probabilística (o modelo pode não pesquisar e responder do próprio conhecimento), mais chamadas e custo, e privilégio desnecessário ao modelo (Artigos 9, 10 e 11) |
@@ -744,7 +744,7 @@ Detalhes em `07-test-plan.md` e na skill `testing`.
 |---|---|---|
 | Unitário | `DivisorTexto`, `NormalizadorTexto`, `AnalisadorConteudo`, `MontadorContextoRag`, `ValidadorRespostaModelo`, mascaramento, casos de uso com dublês | JUnit 5, Mockito, AssertJ |
 | Arquitetura | Direção das dependências e ausência de Spring AI/JDBC no domínio; `api-atendimentos` sem JDBC/VectorStore/EmbeddingModel | ArchUnit |
-| Integração `api-conhecimento` | Cadastro, publicação atômica, falha no lote, busca com filtros, vigência, limpeza | `@SpringBootTest` + Testcontainers `pgvector/pgvector:0.8.2-pg18-trixie`, `EmbeddingModel` falso determinístico |
+| Integração `api-conhecimento` | Cadastro, publicação atômica, falha no lote, busca com filtros, vigência, limpeza | `@SpringBootTest` + Testcontainers `pgvector/pgvector:0.8.7-pg18-trixie`, `EmbeddingModel` falso determinístico |
 | Contrato REST | Todos os endpoints, erros, `X-Correlation-Id`, credenciais | MockMvc / `@WebMvcTest` |
 | Contrato MCP | `tools/list`, `tools/call`, erros, 401 | Cliente MCP real contra servidor com porta aleatória |
 | Integração `api-atendimentos` | Fluxo B completo, falhas de MCP e OpenAI, prazo total, health `DEGRADADO` | Servidor MCP de teste + WireMock da OpenAI |
@@ -764,7 +764,7 @@ Comandos (detalhados em `04-plan.md`):
 
 ## 15. Pendências para `04-plan.md`
 
-- Fixar o patch do Spring Boot 4.1.x e a tag da imagem pgvector após conferir as notas oficiais.
-- Fixar as versões exatas de springdoc 3.x, ArchUnit e WireMock (as demais vêm do BOM do Boot).
+- ~~Fixar o patch do Spring Boot 4.1.x e a tag da imagem pgvector~~ — feito em T002 e T006 (`04-plan.md` §3: Boot 4.1.2, imagem `0.8.7-pg18-trixie`).
+- ~~Fixar as versões de springdoc, ArchUnit e WireMock~~ — feito em T006 (`04-plan.md` §3).
 - Escolher o snapshot do modelo de chat pelo eval inicial.
 - Confirmar os itens **(conferir)**: score do `PgVectorStore` com cosseno, tipo da coluna `metadata`, `vectorStore.delete(Filter.Expression)`, propriedades de status customizado do Actuator, customização de cabeçalhos no cliente MCP, recursos de retry do Spring Framework 7, propriedade de conteúdo nas observações do Spring AI, `spring.ai.model.chat: none`.

@@ -1,0 +1,66 @@
+# api-conhecimento. Credenciais vêm de variáveis de ambiente (sem valor padrão = a subida falha, citando a variável).
+server:
+  port: 8081
+  error:
+    include-stacktrace: never
+    include-message: never
+    include-binding-errors: never
+    include-exception: false
+
+spring:
+  application:
+    name: api-conhecimento
+  threads:
+    virtual:
+      enabled: true
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+  ai:
+    model:
+      chat: none # este serviço só usa embeddings
+    openai:
+      api-key: ${OPENAI_API_KEY}
+      timeout: ${OPENAI_TIMEOUT:30s}
+      max-retries: 0 # novas tentativas ficam na aplicação, em um único ponto (ADR-13)
+      embedding:
+        model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+        dimensions: ${OPENAI_EMBEDDING_DIMENSIONS:1536}
+
+coti:
+  conhecimento:
+    seguranca:
+      admin-api-key: ${CONHECIMENTO_ADMIN_API_KEY}
+      monitoramento-api-key: ${MONITORAMENTO_API_KEY}
+    openai:
+      api-key: ${OPENAI_API_KEY} # só validação de presença; o Spring AI lê spring.ai.openai.api-key
+    web:
+      limite-corpo-bytes: 262144 # 256 KB
+    documentacao-publica: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+      show-components: when-authorized
+      roles: MONITORAMENTO
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: false
+
+logging:
+  structured:
+    format:
+      console: ecs
+    ecs:
+      service:
+        name: api-conhecimento

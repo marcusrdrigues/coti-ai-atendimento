@@ -1,0 +1,8 @@
+# Perfil de desenvolvimento local: documentação OpenAPI e Swagger UI abertas.
+coti:
+  conhecimento:
+    documentacao-publica: true
+
+springdoc:
+  swagger-ui:
+    enabled: true

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Agregador do monorepo. NÃO é parent dos serviços: cada serviço é um projeto Spring Boot
+  independente (ADR-01 de specs/03-architecture.md) e pode ser extraído para outro repositório.
+  Este POM só permite compilar e testar tudo de uma vez com ./mvnw verify.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>br.com.coti</groupId>
+    <artifactId>coti-ai-atendimento</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>COTI AI Atendimento</name>
+    <description>Agregador dos microsserviços api-conhecimento e api-atendimentos</description>
+
+    <modules>
+        <module>api-conhecimento</module>
+        <module>api-atendimentos</module>
+    </modules>
+</project>

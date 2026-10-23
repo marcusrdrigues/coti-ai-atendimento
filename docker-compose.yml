@@ -1,0 +1,81 @@
+# Ambiente local do COTI AI Atendimento. Credenciais vêm do arquivo .env (nunca versionado).
+# Copie .env.example para .env e preencha antes de subir.
+name: coti-ai-atendimento
+
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.7-pg18-trixie
+    container_name: coti-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+      CONHECIMENTO_FLYWAY_USER: ${CONHECIMENTO_FLYWAY_USER:?defina CONHECIMENTO_FLYWAY_USER no .env}
+      CONHECIMENTO_FLYWAY_PASSWORD: ${CONHECIMENTO_FLYWAY_PASSWORD:?defina CONHECIMENTO_FLYWAY_PASSWORD no .env}
+      CONHECIMENTO_DB_USER: ${CONHECIMENTO_DB_USER:?defina CONHECIMENTO_DB_USER no .env}
+      CONHECIMENTO_DB_PASSWORD: ${CONHECIMENTO_DB_PASSWORD:?defina CONHECIMENTO_DB_PASSWORD no .env}
+    ports:
+      # Somente loopback: o banco não fica acessível pela rede local da máquina.
+      - "127.0.0.1:5434:5432"
+    volumes:
+      # PostgreSQL 18+: o volume é montado em /var/lib/postgresql (não em /data).
+      - coti-pgdata:/var/lib/postgresql
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # -h 127.0.0.1 só responde depois do init: durante ele o servidor temporário escuta apenas no socket.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d coti_conhecimento"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    networks:
+      - coti-net
+
+
+  api-conhecimento:
+    build: ./api-conhecimento
+    image: coti/api-conhecimento:local
+    container_name: coti-api-conhecimento
+    restart: unless-stopped
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?defina OPENAI_API_KEY no .env}
+      CONHECIMENTO_ADMIN_API_KEY: ${CONHECIMENTO_ADMIN_API_KEY:?defina CONHECIMENTO_ADMIN_API_KEY no .env}
+      MONITORAMENTO_API_KEY: ${MONITORAMENTO_API_KEY:?defina MONITORAMENTO_API_KEY no .env}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      OPENAI_EMBEDDING_DIMENSIONS: ${OPENAI_EMBEDDING_DIMENSIONS:-1536}
+    ports:
+      - "127.0.0.1:8081:8081"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8081/actuator/health/liveness || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+    networks:
+      - coti-net
+
+  api-atendimentos:
+    build: ./api-atendimentos
+    image: coti/api-atendimentos:local
+    container_name: coti-api-atendimentos
+    restart: unless-stopped
+    # Sem depends_on da api-conhecimento: o serviço sobe e responde mesmo com ela fora do ar (RNF07).
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?defina OPENAI_API_KEY no .env}
+      OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL:?defina OPENAI_CHAT_MODEL no .env}
+      MONITORAMENTO_API_KEY: ${MONITORAMENTO_API_KEY:?defina MONITORAMENTO_API_KEY no .env}
+    ports:
+      - "127.0.0.1:8082:8082"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8082/actuator/health/liveness || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+    networks:
+      - coti-net
+
+networks:
+  coti-net:
+
+volumes:
+  coti-pgdata:

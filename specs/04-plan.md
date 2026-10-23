@@ -41,18 +41,24 @@ A Fase 6 pode começar logo após a Fase 2 para o que não depende da `api-conhe
 
 ## 3. Versões fixadas
 
-Preenchida pela tarefa T006 antes de qualquer `pom.xml`. Nenhum valor abaixo pode ser escrito de memória.
+Preenchida pelas tarefas T002 e T006 em 2026-10-22, consultando o Docker Hub e o Maven Central (`maven-metadata.xml` e POMs publicados). Itens da fase 2 em diante devem usar estes valores.
 
 | Item | Versão | Fonte conferida |
 |---|---|---|
-| Spring Boot 4.1.x (patch) | _a definir em T006_ | |
-| Spring AI | 2.0.1 | `03-architecture.md` |
-| springdoc-openapi 3.x | _a definir em T006_ | |
-| ArchUnit | _a definir em T006_ | |
-| WireMock | _a definir em T006_ | |
-| Testcontainers | gerenciada pelo Boot (confirmar pacotes 2.x) | |
-| Imagem PostgreSQL | `pgvector/pgvector:0.8.2-pg18-trixie` (confirmar tag) | |
-| Artefato do MCP Client | _a definir em T006_ | |
+| Spring Boot | **4.1.2** (última 4.1.x estável; 4.2.0-RC1 é pré-lançamento e não é usada) | `repo.maven.apache.org/.../spring-boot-starter-parent/maven-metadata.xml` |
+| Spring AI | **2.0.1** (exigida pelo projeto; já existe 2.0.2, não adotada) | `spring-ai-bom` 2.0.1 no Maven Central |
+| Compatibilidade Boot × Spring AI | O POM publicado do `spring-ai-starter-mcp-client` 2.0.1 depende de `spring-boot-starter` **4.1.1**. Usamos 4.1.2 (patch seguinte do mesmo minor). Se `./mvnw verify` na T009 acusar incompatibilidade, voltar para 4.1.1 e registrar aqui | POM `spring-ai-starter-mcp-client-2.0.1.pom` |
+| Spring Framework / Jackson / JUnit / Flyway | 7.0.10 / Jackson 3.1.7 (`tools.jackson`) / 6.0.3 / 12.4.0, gerenciadas pelo Boot 4.1.2 | `spring-boot-dependencies-4.1.2.pom` |
+| springdoc-openapi | **3.1.1** (`springdoc-openapi-starter-webmvc-ui`; a 3.1.0 já subiu para Boot 4.1.0) | `maven-metadata.xml` do springdoc; notas da 3.1.0 |
+| ArchUnit | **1.5.1** (`archunit-junit5`) | `maven-metadata.xml` do ArchUnit |
+| WireMock | **3.13.2** (`org.wiremock:wiremock`; a 4.0.0 só tem betas) | `maven-metadata.xml` do WireMock. Risco: usa Jackson 2 e o Boot 4 usa Jackson 3; conferir ao introduzir (T050/T056) |
+| Testcontainers | **2.0.5**, gerenciada pelo Boot 4.1.2. Artefatos: `org.testcontainers:testcontainers-postgresql` e `testcontainers-junit-jupiter`; classe `org.testcontainers.postgresql.PostgreSQLContainer` (a de `org.testcontainers.containers` é a antiga) | `spring-boot-dependencies-4.1.2.pom`; conteúdo do JAR `testcontainers-postgresql-2.0.5` |
+| Pacotes de teste do Boot 4 | `@WebMvcTest` em `org.springframework.boot.webmvc.test.autoconfigure` (módulo `spring-boot-webmvc-test`) | Conteúdo do JAR `spring-boot-webmvc-test-4.1.2` |
+| Imagem PostgreSQL | **`pgvector/pgvector:0.8.7-pg18-trixie`** (pgvector 0.8.7, PostgreSQL 18, Debian trixie; publicada em 2026-10-01). A tag `0.8.2-pg18-trixie` citada antes também existe, mas está 5 versões atrás | API do Docker Hub (`/v2/repositories/pgvector/pgvector/tags`) e `docker manifest inspect` |
+| Artefato do MCP Client | **`org.springframework.ai:spring-ai-starter-mcp-client`** (transporte Streamable HTTP via `spring-ai-autoconfigure-mcp-client-httpclient`, cliente HTTP do JDK). A variante `-webflux` não é usada | POM do starter 2.0.1 e listagem do Maven Central |
+| MCP Server | `org.springframework.ai:spring-ai-starter-mcp-server-webmvc` | Listagem do Maven Central |
+
+Ainda a conferir em tarefas posteriores (spikes T031, T037, T044, T061): detalhes de API do Spring AI listados em `03-architecture.md` §15.
 
 ---
 
@@ -75,7 +81,7 @@ Preenchida pela tarefa T006 antes de qualquer `pom.xml`. Nenhum valor abaixo pod
 - `docker compose up -d postgres` sobe o container saudável (`healthcheck` com `pg_isready`).
 - A porta está ligada a `127.0.0.1:5434`, não a `0.0.0.0`.
 - O banco `coti_conhecimento` existe; `coti_owner` é o dono; `coti_app` conecta e não tem privilégio de DDL.
-- A extensão `vector` está disponível na versão 0.8.2.
+- A extensão `vector` está disponível na versão 0.8.7.
 - Senhas vêm do `.env`; `.env` está no `.gitignore`; `.env.example` não tem valores.
 
 **Comandos de validação.**
@@ -97,7 +103,7 @@ git check-ignore .env
 ```
 
 **Riscos técnicos.**
-- Tag da imagem `0.8.2-pg18-trixie` diferente no Docker Hub → conferir antes (T003).
+- Tag da imagem `0.8.7-pg18-trixie` diferente no Docker Hub → conferir antes (T003).
 - Scripts de `docker-entrypoint-initdb.d` só rodam com volume vazio → documentar `docker compose down -v` para recriar.
 - `.sql` não lê variáveis de ambiente → usar `.sh` com `psql` e variáveis.
 - Porta 5434 ocupada na máquina → mensagem clara no README.
