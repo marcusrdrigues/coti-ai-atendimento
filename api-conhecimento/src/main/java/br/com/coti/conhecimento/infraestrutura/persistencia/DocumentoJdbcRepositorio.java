@@ -130,6 +130,15 @@ public final class DocumentoJdbcRepositorio implements RepositorioDocumentoPort 
     }
 
     @Override
+    public List<Documento> buscarProcessandoAnterioresA(OffsetDateTime limite) {
+        return jdbc.sql("SELECT " + COLUNAS + " FROM documento WHERE status = 'PROCESSANDO' "
+                + "AND cadastrado_em < :limite ORDER BY cadastrado_em")
+                .param("limite", limite)
+                .query(MAPEADOR_DOCUMENTO)
+                .list();
+    }
+
+    @Override
     public Pagina<DocumentoResumo> listar(FiltroDocumentos filtro, int pagina, int tamanho) {
         StringBuilder where = new StringBuilder(" WHERE status <> 'PROCESSANDO'");
         if (filtro.status() != null) {

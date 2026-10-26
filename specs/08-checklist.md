@@ -18,7 +18,7 @@ Convenção: só se registra como "passou" um teste que foi executado, com o com
 | 1 — Infraestrutura Docker e PostgreSQL/pgvector | **Concluída** | T001–T007 (7/7) | 2026-10-22 |
 | 2 — Estrutura Maven e inicialização dos dois microsserviços | **Concluída** | T008–T018 (11/11) | 2026-10-22 |
 | 3 — Persistência e ingestão de conhecimento | **Concluída** | T019–T027 (9/9) | 2026-10-23 |
-| 4 — Chunking e geração de embeddings | Pendente | T028–T036 | — |
+| 4 — Chunking e geração de embeddings | **Concluída** | T028–T036 (9/9) | 2026-10-26 |
 | 5 — Busca vetorial e MCP Server | Pendente | T037–T043 | — |
 | 6 — MCP Client e API de Atendimentos | Pendente | T044–T053 | — |
 | 7 — Integração com OpenAI e contexto RAG | Pendente | T054–T061 | — |
@@ -326,6 +326,94 @@ Nenhum teste Java foi executado nesta fase: ainda não existe código Java (Fase
 #### Próxima fase
 
 **Fase 4 — Chunking e geração de embeddings** (T028–T036). A primeira tarefa é a **T028** (`DivisorTexto` com sobreposição); a **T031** (spike do Spring AI 2.0.1 sobre `metadata`, `delete(Filter.Expression)` e `add()` com id repetido) pode ser feita em seguida, pois precisa do banco já migrado.
+
+---
+
+### Fase 4 — Chunking e geração de embeddings
+
+**Status:** concluída. **Data:** 2026-10-26. **Tarefas:** T028 a T036 (9 de 9).
+
+#### O que foi entregue
+
+| Tarefa | Resultado |
+|---|---|
+| T028 | `DivisorTexto` e `ConfiguracaoDivisao` (1.500 / 200 / 50 / 500 em `application.yml`): corte por parágrafo, fim de frase, quebra de linha e espaço, sobreposição iniciando em começo de palavra, recusa com `DocumentoGrandeDemaisException` |
+| T029 | `IdTrecho` (UUID v5 de `documentoId:ordem`) e `VigenciaMetadado` (`AAAAMMDD`, `99991231` sem vigência) |
+| T030 | `EmbeddingModelFalso` determinístico (1536 dimensões) com modos lento, falha nas próximas N chamadas, falha sempre e falha só na chamada N; exceções reais do SDK da OpenAI (429, 5xx, 401, tempo esgotado) |
+| T031 | Spike do Spring AI 2.0.1 versionado em `PgVectorStoreComportamentoIT`; resultados em `04-plan.md` §3 |
+| T032 | `spring-ai-starter-vector-store-pgvector` (dependência já aprovada na §13 da arquitetura), `PgVectorStore` com `initialize-schema=false`, `schema-validation=true`, HNSW, cosseno; contexto de teste sobe com o dublê |
+| T033 | `RepositorioVetorialPort` e `PgVectorRepositorioAdapter`: gravação em lote com metadados, `promoverTrechos`, `removerPorDocumento`; `TradutorFalhasEmbedding` converte falhas do SDK em exceções de domínio (transitória ou definitiva) |
+| T034 | Publicação atômica por `PublicarDocumentoService` (ver desvios) |
+| T035 | `PoliticaNovasTentativas`, `IndexarDocumentoService` (lotes de 100) e `CadastrarConhecimentoService` completo: divisão → inserção `PROCESSANDO` → embeddings → publicação → 201; compensação → `ERRO_PROCESSAMENTO` e 503 `MODELO_INDISPONIVEL` (com `conhecimentoId` e `Retry-After`); 413 acima de 500 trechos |
+| T036 | `LimpezaDocumentosInterrompidos` (`ApplicationRunner`) sobre `RecolherDocumentosInterrompidosService`: `PROCESSANDO` há mais de 10 minutos vira `ERRO_PROCESSAMENTO` e perde os trechos |
+
+#### Arquivos criados (em `api-conhecimento/src`)
+
+- `main`: `dominio/{ConfiguracaoDivisao, DivisorTexto, IdTrecho, Trecho, VigenciaMetadado}`, `dominio/excecao/{DocumentoGrandeDemaisException, FalhaEmbeddingException, FalhaEmbeddingTransitoriaException}`, `aplicacao/{IndexarDocumentoService, PoliticaNovasTentativas, PublicarDocumentoService, RecolherDocumentosInterrompidosService}`, `aplicacao/porta/RepositorioVetorialPort`, `infraestrutura/vetorial/{PgVectorRepositorioAdapter, TradutorFalhasEmbedding}`, `infraestrutura/config/IndexacaoConfig`, `infraestrutura/persistencia/LimpezaDocumentosInterrompidos`
+- `test`: `dominio/{DivisorTextoTest, IdTrechoEVigenciaTest}`, `aplicacao/{PoliticaNovasTentativasTest, IndexarDocumentoServiceTest, RecolherDocumentosInterrompidosServiceTest, PublicacaoAtomicaIT}`, `api/rest/CadastroCompletoIT`, `infraestrutura/vetorial/{PgVectorStoreComportamentoIT, PgVectorRepositorioAdapterIT, TradutorFalhasEmbeddingTest}`, `infraestrutura/persistencia/{LimpezaDocumentosInterrompidosTest, LimpezaDocumentosInterrompidosIT}`, `suporte/{EmbeddingModelFalso, EmbeddingFalsoConfig}`
+
+#### Arquivos modificados
+
+- `api-conhecimento/pom.xml`: starter do pgvector
+- `application.yml`: `spring.ai.vectorstore.pgvector`, `coti.conhecimento.divisao` e `coti.conhecimento.embeddings`
+- `PropriedadesConhecimento`: componentes `Divisao` e `Embeddings`
+- `CadastrarConhecimentoService` (reescrito), `RepositorioDocumentoPort` e `DocumentoJdbcRepositorio` (`buscarProcessandoAnterioresA`), `ManipuladorExcecoesConhecimento` (413 por excesso de trechos; 503 com `conhecimentoId` e `Retry-After`)
+- Testes: `TesteWeb` (importa o dublê de embeddings), `ConhecimentoControllerTest`, `CadastrarConhecimentoServiceTest`, `RepositorioDocumentoEmMemoria`, `LimiteTamanhoCorpoFilterTest`, `AnalisadorConteudoRegexTest`
+- Removidos: `IndexacaoDocumentoPort`, `IndexadorNaoImplementado` e `CadastroSemIndexadorIT` (o indexador provisório da Fase 3)
+- Specs e docs: `05-tasks.md`, `04-plan.md` (§3, confirmações do spike), `03-architecture.md` (§6.3 e ADR-13), `README.md` e este arquivo
+
+#### Comandos executados e resultados
+
+| Comando | Resultado |
+|---|---|
+| `./mvnw -B -pl api-conhecimento test -Dtest='PgVectorRepositorioAdapterIT,PublicacaoAtomicaIT,CadastroCompletoIT,LimpezaDocumentosInterrompidosIT,ConhecimentoControllerTest'` | **BUILD SUCCESS**, 56 testes, 0 falhas |
+| `./mvnw -B verify` (raiz), 1ª execução | **FALHOU**: `CadastroSemIndexadorIT` esperava 503 e recebeu 201. Causa: o `.class` do teste removido continuava em `target/test-classes` |
+| `./mvnw -B clean verify` (raiz) | **BUILD SUCCESS**: `api-conhecimento` **350 testes, 0 falhas, 1 ignorado**; `api-atendimentos` 61 testes, 0 falhas, 1 ignorado |
+| `OPENAI_API_KEY=<chave falsa> docker compose up -d --build postgres api-conhecimento` | Contêiner `healthy`; log: "PG VectorStore schema validation" concluída com o papel DML-only; `/actuator/health/readiness` = `UP` |
+| `docker compose down` | Stack derrubada (volume do banco preservado) |
+
+#### Testes automatizados (resumo)
+
+| Área | Cobertura |
+|---|---|
+| `DivisorTexto` (27) | limite de tamanho, sobreposição em começo de palavra, corte por parágrafo, frase, linha, espaço e meio de palavra, texto curto, último trecho curto preservado, determinismo, acentos, limite de 500 trechos |
+| `IdTrecho` e vigência (11) | UUID v5 estável, distinto por documento e posição; conversão de data para `AAAAMMDD`, `99991231`, vigência na fronteira |
+| Retry e lotes (15) | só falha transitória é repetida, número máximo de tentativas, backoff com variação, falha definitiva sem nova tentativa, divisão em lotes de `tamanhoLote` |
+| `TradutorFalhasEmbedding` (8) | 429, 5xx, 408 e erro de E/S → transitória; 401, 403 e demais → definitiva, sem a chave no log |
+| `CadastrarConhecimentoService` (16) | ordem das chamadas, rejeições sem tocar no provedor, 413 antes de gravar, compensação (inclusive quando a publicação falha), exceções suprimidas preservadas |
+| Banco real | spike do `PgVectorStore` (8): tipo `json`, upsert por id, `delete` por filtro, só o texto vira embedding, 1536 dimensões, lotes grandes; adaptador (11): ids, metadados, vigência, idempotência, promoção só do documento certo, remoção, tradução de falhas sem linhas gravadas; publicação atômica (5): falha na atualização do documento ou contagem divergente desfaz a promoção |
+| `CadastroCompletoIT` (16) | 201 com trechos, metadados e vetores reais; lotes de 2; 429 e 5xx seguidos de sucesso; 401 sem nova tentativa; 429 permanente (3 chamadas); falha definitiva no 2º lote sem trechos restantes; 413, 409, injeção e CPF sem chamar o provedor; 401 sem chave |
+| Limpeza (2 + 5) | falha na limpeza não impede a subida; recolhe antigos com e sem trechos, preserva recentes e publicados, idempotente |
+
+**Teste ignorado (1 por serviço):** a variante "ausente" de `OPENAI_API_KEY` no `InicializacaoSemVariavelTest`, porque a variável existe no ambiente deste computador (igual às fases anteriores).
+
+**Não executado:** cadastro real contra a OpenAI e `POST` na stack Docker. A chave administrativa só existe no `.env`, que não li, e um cadastro válido enviaria texto à OpenAI. O caminho está coberto com o dublê do modelo e PostgreSQL real; falta apenas a prova com a OpenAI de verdade (ver pendências).
+
+#### Decisões e desvios
+
+- **Publicação sem `PublicacaoPort`/`PublicacaoJdbcAdapter` (desvio da T034).** `PublicarDocumentoService` abre a transação na camada de aplicação e usa `RepositorioVetorialPort.promoverTrechos` e `RepositorioDocumentoPort.atualizarEstado`. Descartado o adaptador JDBC separado: duplicaria o acesso à `vector_store`. Se a contagem de trechos promovidos diferir da gravada, a transação desfaz (`IllegalStateException`).
+- **413 antes de gravar (desvio do diagrama de §6.2).** A divisão acontece antes do `INSERT`; acima de 500 trechos nada é salvo, o que casa com o contrato (RF02) e evita um documento em `ERRO_PROCESSAMENTO` sem causa útil para o gestor.
+- **Último trecho curto nunca é descartado.** `tamanhoMinimo` só limita a posição do corte, para não perder o final do texto.
+- **Retry com `RetryTemplate` do Spring Framework 7**, sem dependência nova; `max-retries: 0` no SDK.
+- **`IndexacaoDocumentoPort` removida.** A porta provisória da Fase 3 deixou de ter razão de existir; `CadastrarConhecimentoService` agora usa `IndexarDocumentoService` e `PublicarDocumentoService`.
+- **`PROCESSANDO` continua invisível** na API e na busca (metadado `status` nos trechos).
+- **Arquivos `.class` obsoletos.** Ao remover um teste, rode `./mvnw clean verify` uma vez; senão o Surefire executa o `.class` antigo em `target/test-classes`.
+- **Erro de causa no 503:** `BASE_CONHECIMENTO_INDISPONIVEL` quando a causa é o banco, `MODELO_INDISPONIVEL` nos demais casos.
+
+#### Pendências e riscos
+
+- **Sem prova com a OpenAI real.** Ainda não houve um cadastro de ponta a ponta com chave válida. Fazer na T067 (documentos reais da COTI), com a chave do `.env`.
+- **Segurança padrão do Spring:** na subida a `api-conhecimento` registra "Using generated security password" (o `UserDetailsService` em memória do Spring Boot). O valor é uma senha aleatória sem uso, porque a autenticação é por `X-Api-Key`, mas imprimir credencial no log viola a regra de logs sem segredo. Fora do escopo da Fase 4; sugestão: excluir `UserDetailsServiceAutoConfiguration` (ou declarar um `UserDetailsService` vazio) na Fase 8. Avaliar também a `api-atendimentos`.
+- **Sem avaliação de qualidade da divisão.** Tamanho e sobreposição (1.500 / 200) seguem a skill; a nota de recuperação só existe com o eval da Fase 8 (T069/T070). Não há afirmação de qualidade sem medir.
+- **Cadastro síncrono.** Um documento de 500 trechos faz ~5 chamadas à OpenAI dentro da requisição HTTP; o gestor espera. Aceitável no MVP; assíncrono fica fora do escopo.
+- **Limpeza na subida só roda no start.** Um cadastro interrompido com a aplicação no ar (sem reiniciar) permanece `PROCESSANDO` até a próxima subida. Raro, pois a compensação cobre falhas; avaliar tarefa agendada se aparecer.
+- Itens antigos: allowlists de e-mail e telefone institucionais vazias, `Retry-After` em 429 (Fase 8), chave MCP (Fase 5), scanner de segredos (T066), documentos reais (T067).
+
+#### Próxima fase
+
+**Fase 5 — Busca vetorial e MCP Server** (T037–T043). A primeira tarefa é a **T037**, um spike (`ScoreCossenoIT`) para confirmar como o Spring AI 2.0.1 devolve a similaridade antes de fixar o limiar de relevância.
+
+---
 
 ## 2. Checklist de produção (a completar na T072)
 

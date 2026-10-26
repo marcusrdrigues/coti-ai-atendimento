@@ -76,23 +76,23 @@ Legenda: `CON` = `api-conhecimento`, `ATE` = `api-atendimentos`, `INF` = infraes
 
 ## Fase 4 — Chunking e geração de embeddings
 
-- [ ] **T028** `CON` — `DivisorTexto` e `ConfiguracaoDivisao` (1.500/200/50/500) conforme skill `rag-pgvector` §4.
+- [x] **T028** `CON` — `DivisorTexto` e `ConfiguracaoDivisao` (1.500/200/50/500) conforme skill `rag-pgvector` §4.
   Dep.: T021. Verificação: `DivisorTextoTest`: limite de tamanho, sobreposição, corte em frase, texto curto, determinismo, mais de 500 trechos, configuração inválida, texto sem espaços sem laço.
-- [ ] **T029** `CON` — `IdTrecho` (UUID v5 de `documentoId:ordem`) e `VigenciaMetadado` (`AAAAMMDD`, `99991231`).
+- [x] **T029** `CON` — `IdTrecho` (UUID v5 de `documentoId:ordem`) e `VigenciaMetadado` (`AAAAMMDD`, `99991231`).
   Dep.: T021. Verificação: testes unitários de determinismo e conversão.
-- [ ] **T030** `CON` — `EmbeddingModelFalso` determinístico (vetores de 1536 por texto, com modos lento e com falha configuráveis) em `@TestConfiguration`.
+- [x] **T030** `CON` — `EmbeddingModelFalso` determinístico (vetores de 1536 por texto, com modos lento e com falha configuráveis) em `@TestConfiguration`.
   Dep.: T020. Verificação: usado por um teste de contexto sem `OPENAI_API_KEY` real.
-- [ ] **T031** `CON` **(spike)** — Confirmar no Spring AI 2.0.1: tipo da coluna `metadata`, assinatura de `vectorStore.delete(Filter.Expression)`, comportamento de `add()` com id já existente, recursos de retry do Spring Framework 7. Registrar em `04-plan.md`.
+- [x] **T031** `CON` **(spike)** — Confirmar no Spring AI 2.0.1: tipo da coluna `metadata`, assinatura de `vectorStore.delete(Filter.Expression)`, comportamento de `add()` com id já existente, recursos de retry do Spring Framework 7. Registrar em `04-plan.md`.
   Dep.: T019. Verificação: registro com fonte e, quando possível, teste mínimo.
-- [ ] **T032** `CON` — Configuração do `EmbeddingModel` (OpenAI, `text-embedding-3-small`, 1536, `max-retries: 0`) e do `PgVectorStore` (`initialize-schema=false`, `schema-validation=true`, HNSW, cosseno).
+- [x] **T032** `CON` — Configuração do `EmbeddingModel` (OpenAI, `text-embedding-3-small`, 1536, `max-retries: 0`) e do `PgVectorStore` (`initialize-schema=false`, `schema-validation=true`, HNSW, cosseno).
   Dep.: T019, T030. Verificação: contexto sobe com o dublê; propriedades em `application.yml` sem literal de chave.
-- [ ] **T033** `CON` — `RepositorioVetorialPort` e `PgVectorRepositorioAdapter`: gravar lote com metadados (status `PROCESSANDO`, `vigenteAte` inteiro), remover por `documentoId`.
+- [x] **T033** `CON` — `RepositorioVetorialPort` e `PgVectorRepositorioAdapter`: gravar lote com metadados (status `PROCESSANDO`, `vigenteAte` inteiro), remover por `documentoId`.
   Dep.: T029, T031, T032. Verificação: `PgVectorRepositorioAdapterIT` confere metadados e remoção.
-- [ ] **T034** `CON` — `PublicacaoPort` e `PublicacaoJdbcAdapter`: transação curta que muda chunks e documento para `PUBLICADO`.
+- [x] **T034** `CON` — Publicação atômica: transação curta que muda chunks e documento para `PUBLICADO`. Implementada por `PublicarDocumentoService` (transação na camada de aplicação) e `RepositorioVetorialPort.promoverTrechos`, sem `PublicacaoPort`/`PublicacaoJdbcAdapter` (ver `08-checklist.md`, Fase 4).
   Dep.: T033. Verificação: `PublicacaoAtomicaIT` (falha simulada no meio → nada muda).
-- [ ] **T035** `CON` — `PoliticaNovasTentativas` (backoff exponencial com variação, só transitórios) e caminho feliz do `CadastrarConhecimentoService`: divisão → lotes de 100 → publicação → 201; compensação em falha → `ERRO_PROCESSAMENTO` e 503 `MODELO_INDISPONIVEL` com `conhecimentoId`; 413 acima de 500 trechos.
+- [x] **T035** `CON` — `PoliticaNovasTentativas` (backoff exponencial com variação, só transitórios) e caminho feliz do `CadastrarConhecimentoService`: divisão → lotes de 100 → publicação → 201; compensação em falha → `ERRO_PROCESSAMENTO` e 503 `MODELO_INDISPONIVEL` com `conhecimentoId`; 413 acima de 500 trechos.
   Dep.: T025, T028, T034. Verificação: `PoliticaNovasTentativasTest` e `CadastroCompletoIT` (sucesso, 429 seguido de sucesso, falha no segundo lote sem chunks restantes, 401 sem nova tentativa).
-- [ ] **T036** `CON` — `LimpezaDocumentosInterrompidos` (`ApplicationRunner`): documentos `PROCESSANDO` há mais de 10 minutos e seus chunks.
+- [x] **T036** `CON` — `LimpezaDocumentosInterrompidos` (`ApplicationRunner`): documentos `PROCESSANDO` há mais de 10 minutos e seus chunks.
   Dep.: T035. Verificação: `LimpezaDocumentosInterrompidosIT`.
 
 ## Fase 5 — Busca vetorial e MCP Server

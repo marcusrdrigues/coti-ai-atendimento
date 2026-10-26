@@ -36,6 +36,14 @@ spring:
       embedding:
         model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
         dimensions: ${OPENAI_EMBEDDING_DIMENSIONS:1536}
+    vectorstore:
+      pgvector:
+        initialize-schema: false # o esquema vem das migrações Flyway, nunca da aplicação
+        schema-validation: true # confere ao subir que a tabela existe
+        remove-existing-vector-store-table: false
+        index-type: HNSW
+        distance-type: COSINE_DISTANCE
+        dimensions: ${OPENAI_EMBEDDING_DIMENSIONS:1536} # deve bater com vector(1536) da migração V3
 
 coti:
   conhecimento:
@@ -49,6 +57,18 @@ coti:
     embedding:
       modelo: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small} # gravado em cada documento
     documentacao-publica: false
+    divisao: # em caracteres (RF02); valores iniciais, ajustados pelo eval de recuperação
+      tamanho-maximo: 1500
+      sobreposicao: 200
+      tamanho-minimo: 50
+      maximo-trechos: 500
+    embeddings: # RF03
+      tamanho-lote: 100
+      novas-tentativas: 2 # só para falha transitória (429, 5xx, tempo esgotado); o SDK fica com max-retries 0
+      atraso-inicial: 200ms
+      multiplicador: 2
+      atraso-maximo: 2s
+      jitter: 100ms
     analise:
       # Padrões de prompt injection (regex, sem diferenciar maiúsculas). Documento que casar fica EM_REVISAO.
       padroes-injecao:

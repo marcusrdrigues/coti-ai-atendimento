@@ -7,6 +7,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ContextConfiguration;
 
 /**
@@ -22,6 +23,7 @@ import org.springframework.test.context.ContextConfiguration;
         "MONITORAMENTO_API_KEY=" + ChavesTeste.MONITORAMENTO
 })
 @ContextConfiguration(initializers = PostgresContainerConfig.class)
+@Import(EmbeddingFalsoConfig.class)
 @AutoConfigureMockMvc
 public @interface TesteWeb {
 }

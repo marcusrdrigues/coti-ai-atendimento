@@ -427,12 +427,11 @@ sequenceDiagram
         S->>R: salvar status EM_REVISAO, pendencias
         S-->>C: 202 EM_REVISAO
     end
-    S->>R: salvar status PROCESSANDO
     S->>D: dividir(texto) — 1.500 / 200
     alt mais de 500 trechos
-        S->>R: marcar ERRO_PROCESSAMENTO
-        S-->>C: 413
+        S-->>C: 413 (nada foi gravado)
     end
+    S->>R: salvar status PROCESSANDO
     loop lotes de 100 trechos
         S->>V: adicionar(lote, status PROCESSANDO)
         V->>O: embeddings (timeout 30 s, até 2 novas tentativas em erro transitório)
@@ -460,7 +459,9 @@ Algoritmo da skill `rag-pgvector` (seção 4): janela de 1.500 caracteres, sobre
 3. Com todos os lotes gravados, **uma transação curta** faz:
    - `UPDATE vector_store SET metadata = jsonb_set(metadata::jsonb, '{status}', '"PUBLICADO"')::json WHERE metadata->>'documentoId' = :id` **(conferir** tipo `json` da coluna na versão);
    - `UPDATE documento SET status = 'PUBLICADO', quantidade_chunks = :n WHERE id = :id`.
-4. Falha nos passos 2 ou 3: `vectorStore.delete(filtro documentoId == :id)` **(conferir** assinatura) e `documento.status = ERRO_PROCESSAMENTO`.
+4. Falha nos passos 2 ou 3: `vectorStore.delete(filtro documentoId == :id)` (assinatura e tipo `json` conferidos no spike T031, ver `04-plan.md` §3) e `documento.status = ERRO_PROCESSAMENTO`.
+
+**Implementação (Fase 4).** A divisão em mais de 500 trechos é recusada com 413 **antes** de gravar o documento (nada a compensar). A transação do passo 3 fica na camada de aplicação (`PublicarDocumentoService`, `@Transactional`) e usa `RepositorioVetorialPort.promoverTrechos`; não há `PublicacaoPort` nem `PublicacaoJdbcAdapter`, porque a mesma conexão do pool serve às duas tabelas e o Spring gerencia a transação. Descartado: um adaptador JDBC próprio só para publicar, que repetiria o acesso a `vector_store` fora do adaptador vetorial.
 
 Assim, as chamadas à OpenAI ficam fora de transação de banco e a publicação é atômica (ADR-07).
 
@@ -706,7 +707,7 @@ Nenhum destes itens é exigido para rodar localmente, mas **todos** são obrigat
 | ADR-10 | Referências locais `T1..Tn` no prompt; fontes copiadas do resultado MCP | Pedir ao modelo que devolva UUIDs ou títulos: maior chance de erro de cópia e de fonte inventada |
 | ADR-11 | Autenticação por chave de API em filtro próprio do Spring Security | Módulo de segurança MCP do Spring AI Community: dependência extra para um caso simples; OAuth2: necessário antes de publicar em rede (11.2), excessivo para o MVP local |
 | ADR-12 | Limite de requisições em memória, filtro próprio | Bucket4j: dependência extra; continua precisando de armazenamento distribuído para valer com várias instâncias, o que é tarefa pré-produção |
-| ADR-13 | Retry e timeout na aplicação, SDK com `max-retries: 0`; recursos de resiliência do Spring Framework 7 (`@Retryable`/`RetryTemplate` do core) **(conferir)**, ou laço simples com backoff se não atenderem o `Prazo` | Retry no SDK **e** na aplicação: tentativas multiplicadas. Resilience4j: dependência extra para o que o framework já oferece |
+| ADR-13 | Retry e timeout na aplicação, SDK com `max-retries: 0`; `RetryTemplate` do core do Spring Framework 7 (conferido no spike T031), ou laço simples com backoff se não atenderem o `Prazo` | Retry no SDK **e** na aplicação: tentativas multiplicadas. Resilience4j: dependência extra para o que o framework já oferece |
 | ADR-14 | Logs estruturados ECS nativos do Spring Boot | Logback + encoder externo: dependência extra sem ganho no MVP |
 | ADR-15 | Modelo de chat **sem padrão** em `OPENAI_CHAT_MODEL`; exige identificador com versão (snapshot), escolhido pelo eval | Padrão fixado no código ou alias sem versão: comportamento pode mudar sem aviso e invalida o eval |
 | ADR-16 | Erros com `ProblemDetail` nativo do Spring + extensões do contrato | Envelope próprio: reinventa a RFC 9457 que o Spring já implementa |

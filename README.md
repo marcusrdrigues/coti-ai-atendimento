@@ -7,7 +7,7 @@ Plataforma de atendimento inteligente para alunos da COTI Informática, formada 
 
 A especificação completa está em [`specs/`](specs/) (constituição, requisitos, arquitetura, plano, tarefas e contratos). Agentes de codificação seguem o [`AGENTS.md`](AGENTS.md).
 
-> Estado atual: Fases 1 a 3 concluídas (banco em Docker, os dois serviços com segurança, erros padronizados, Actuator e OpenAPI, e o cadastro e a consulta de conhecimentos na `api-conhecimento`). A indexação (chunks e embeddings) chega na Fase 4, então um cadastro sem pendências ainda termina em `503`; acompanhe em [`specs/05-tasks.md`](specs/05-tasks.md).
+> Estado atual: Fases 1 a 4 concluídas (banco em Docker, os dois serviços com segurança, erros padronizados, Actuator e OpenAPI, e na `api-conhecimento` o cadastro com divisão em trechos, embeddings e publicação sem estado parcial, mais a consulta). Um cadastro sem pendências agora chama a OpenAI de verdade (`text-embedding-3-small`); sem uma `OPENAI_API_KEY` válida ele termina em `503 MODELO_INDISPONIVEL`. A busca vetorial e o MCP chegam na Fase 5; acompanhe em [`specs/05-tasks.md`](specs/05-tasks.md).
 
 ## Ambiente local
 
@@ -37,7 +37,7 @@ Para subir as APIs (Fase 2) preencha também:
 
 | Variável | Para quê |
 |---|---|
-| `OPENAI_API_KEY` | Chave da OpenAI (as APIs não chamam a OpenAI antes das Fases 4 e 7, mas a subida exige a variável) |
+| `OPENAI_API_KEY` | Chave da OpenAI (a `api-conhecimento` a usa ao cadastrar, desde a Fase 4, e a `api-atendimentos` ao responder, na Fase 7; a subida exige a variável) |
 | `OPENAI_CHAT_MODEL` | Identificador do modelo de chat, com versão (`api-atendimentos`); será definido pelo eval (T070) |
 | `CONHECIMENTO_ADMIN_API_KEY` | Chave administrativa (`X-Api-Key`) da `api-conhecimento` |
 | `MONITORAMENTO_API_KEY` | Chave (`X-Api-Key`) para métricas e detalhes do health |

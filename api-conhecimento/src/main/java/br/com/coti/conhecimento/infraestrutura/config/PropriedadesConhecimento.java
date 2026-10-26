@@ -1,11 +1,14 @@
 package br.com.coti.conhecimento.infraestrutura.config;
 
+import br.com.coti.conhecimento.dominio.ConfiguracaoDivisao;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
+import java.time.Duration;
 import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
@@ -23,6 +26,8 @@ public record PropriedadesConhecimento(
         @Valid @DefaultValue Web web,
         @Valid @NotNull Embedding embedding,
         @Valid @NotNull Analise analise,
+        @Valid @DefaultValue Divisao divisao,
+        @Valid @DefaultValue Embeddings embeddings,
         @DefaultValue("false") boolean documentacaoPublica) {
 
     /**
@@ -62,6 +67,28 @@ public record PropriedadesConhecimento(
 
     /** Modelo de embedding gravado em cada documento (o mesmo configurado em {@code spring.ai.openai.embedding}). */
     public record Embedding(@NotBlank String modelo) {
+    }
+
+    /** Divisão em trechos (RF02), em caracteres. A coerência entre os valores é checada ao criar a configuração. */
+    public record Divisao(
+            @Positive @DefaultValue("1500") int tamanhoMaximo,
+            @PositiveOrZero @DefaultValue("200") int sobreposicao,
+            @Positive @DefaultValue("50") int tamanhoMinimo,
+            @Positive @DefaultValue("500") int maximoTrechos) {
+
+        public ConfiguracaoDivisao paraDominio() {
+            return new ConfiguracaoDivisao(tamanhoMaximo, sobreposicao, tamanhoMinimo, maximoTrechos);
+        }
+    }
+
+    /** Geração de embeddings (RF03): lotes e novas tentativas só para falhas transitórias, com atraso exponencial. */
+    public record Embeddings(
+            @Positive @DefaultValue("100") int tamanhoLote,
+            @PositiveOrZero @DefaultValue("2") int novasTentativas,
+            @DefaultValue("200ms") Duration atrasoInicial,
+            @Positive @DefaultValue("2") double multiplicador,
+            @DefaultValue("2s") Duration atrasoMaximo,
+            @DefaultValue("100ms") Duration jitter) {
     }
 
     /**

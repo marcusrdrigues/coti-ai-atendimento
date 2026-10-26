@@ -52,6 +52,12 @@ class RepositorioDocumentoEmMemoria implements RepositorioDocumentoPort {
     }
 
     @Override
+    public List<Documento> buscarProcessandoAnterioresA(java.time.OffsetDateTime limite) {
+        return documentos.values().stream()
+                .filter(d -> d.status() == StatusDocumento.PROCESSANDO && d.cadastradoEm().isBefore(limite)).toList();
+    }
+
+    @Override
     public Pagina<DocumentoResumo> listar(FiltroDocumentos filtro, int pagina, int tamanho) {
         List<DocumentoResumo> todos = new ArrayList<>(documentos.values().stream()
                 .filter(d -> d.status() != StatusDocumento.PROCESSANDO)

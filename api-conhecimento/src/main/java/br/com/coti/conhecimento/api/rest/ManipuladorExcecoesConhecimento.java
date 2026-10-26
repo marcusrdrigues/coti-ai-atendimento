@@ -7,6 +7,7 @@ import br.com.coti.conhecimento.dominio.excecao.ConhecimentoDuplicadoException;
 import br.com.coti.conhecimento.dominio.excecao.ConhecimentoNaoEncontradoException;
 import br.com.coti.conhecimento.dominio.excecao.DadoPessoalDetectadoException;
 import br.com.coti.conhecimento.dominio.excecao.DadosInvalidosException;
+import br.com.coti.conhecimento.dominio.excecao.DocumentoGrandeDemaisException;
 import br.com.coti.conhecimento.dominio.excecao.IndexacaoFalhouException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -48,6 +49,12 @@ public class ManipuladorExcecoesConhecimento {
                 CodigoErro.CONHECIMENTO_NAO_ENCONTRADO, request));
     }
 
+    @ExceptionHandler(DocumentoGrandeDemaisException.class)
+    public ResponseEntity<ProblemDetail> documentoGrandeDemais(DocumentoGrandeDemaisException ex, HttpServletRequest request) {
+        return resposta(CodigoErro.CONTEUDO_GRANDE_DEMAIS, request, ProblemaFactory.criar(
+                CodigoErro.CONTEUDO_GRANDE_DEMAIS, request));
+    }
+
     @ExceptionHandler(DadosInvalidosException.class)
     public ResponseEntity<ProblemDetail> dadosInvalidos(DadosInvalidosException ex, HttpServletRequest request) {
         var erros = ex.campos().stream().map(c -> new ErroCampo(c.campo(), c.mensagem())).toList();
@@ -58,9 +65,11 @@ public class ManipuladorExcecoesConhecimento {
     /** O documento ficou {@code ERRO_PROCESSAMENTO}; o gestor o consulta pelo {@code conhecimentoId}. */
     @ExceptionHandler(IndexacaoFalhouException.class)
     public ResponseEntity<ProblemDetail> indexacaoFalhou(IndexacaoFalhouException ex, HttpServletRequest request) {
-        ProblemDetail problema = ProblemaFactory.criar(CodigoErro.MODELO_INDISPONIVEL, request);
+        // Falha do banco durante a indexação é indisponibilidade da base; as demais vêm do serviço de embeddings.
+        CodigoErro codigo = causadaPorBanco(ex) ? CodigoErro.BASE_CONHECIMENTO_INDISPONIVEL : CodigoErro.MODELO_INDISPONIVEL;
+        ProblemDetail problema = ProblemaFactory.criar(codigo, request);
         problema.setProperty("conhecimentoId", ex.conhecimentoId().toString());
-        return resposta(CodigoErro.MODELO_INDISPONIVEL, request, problema);
+        return resposta(codigo, request, problema);
     }
 
     @ExceptionHandler({DataAccessResourceFailureException.class, TransientDataAccessException.class})
@@ -68,6 +77,15 @@ public class ManipuladorExcecoesConhecimento {
         log.error("Banco de dados indisponível.", ex);
         return resposta(CodigoErro.BASE_CONHECIMENTO_INDISPONIVEL, request, ProblemaFactory.criar(
                 CodigoErro.BASE_CONHECIMENTO_INDISPONIVEL, request));
+    }
+
+    private static boolean causadaPorBanco(Throwable falha) {
+        for (Throwable t = falha; t != null; t = t.getCause() == t ? null : t.getCause()) {
+            if (t instanceof DataAccessResourceFailureException || t instanceof TransientDataAccessException) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static ResponseEntity<ProblemDetail> resposta(CodigoErro codigo, HttpServletRequest request,

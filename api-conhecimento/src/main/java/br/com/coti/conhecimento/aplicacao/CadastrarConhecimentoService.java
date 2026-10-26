@@ -1,28 +1,34 @@
 package br.com.coti.conhecimento.aplicacao;
 
 import br.com.coti.conhecimento.aplicacao.porta.AnalisadorConteudoPort;
-import br.com.coti.conhecimento.aplicacao.porta.IndexacaoDocumentoPort;
 import br.com.coti.conhecimento.aplicacao.porta.RepositorioDocumentoPort;
+import br.com.coti.conhecimento.aplicacao.porta.RepositorioVetorialPort;
 import br.com.coti.conhecimento.dominio.Documento;
+import br.com.coti.conhecimento.dominio.DivisorTexto;
 import br.com.coti.conhecimento.dominio.HashConteudo;
 import br.com.coti.conhecimento.dominio.ModeloEmbedding;
 import br.com.coti.conhecimento.dominio.NormalizadorTexto;
 import br.com.coti.conhecimento.dominio.ResultadoAnalise;
+import br.com.coti.conhecimento.dominio.Trecho;
 import br.com.coti.conhecimento.dominio.excecao.ConhecimentoDuplicadoException;
 import br.com.coti.conhecimento.dominio.excecao.DadoPessoalDetectadoException;
 import br.com.coti.conhecimento.dominio.excecao.DadosInvalidosException;
 import br.com.coti.conhecimento.dominio.excecao.IndexacaoFalhouException;
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
- * Cadastro de conhecimento (RF01). Ordem: normalizar → hash e duplicidade → análise do conteúdo → decisão:
- * dado pessoal recusa sem gravar; sinal de injeção grava {@code EM_REVISAO} sem indexar; caso contrário grava
- * {@code PROCESSANDO}, indexa e publica (ou marca {@code ERRO_PROCESSAMENTO} se a indexação falhar).
+ * Cadastro de conhecimento (RF01 a RF03). Ordem: normalizar → hash e duplicidade → análise do conteúdo →
+ * decisão: dado pessoal recusa sem gravar; sinal de injeção grava {@code EM_REVISAO} sem indexar; caso contrário
+ * divide em trechos (documento grande demais é recusado antes de gravar qualquer coisa), grava
+ * {@code PROCESSANDO}, grava os trechos em lotes e publica numa transação curta. Se qualquer passo da indexação
+ * falhar, os trechos já gravados são apagados e o documento fica {@code ERRO_PROCESSAMENTO}: nunca há
+ * publicação parcial.
  */
 @Service
 public final class CadastrarConhecimentoService {
@@ -33,16 +39,23 @@ public final class CadastrarConhecimentoService {
     private static final Logger log = LoggerFactory.getLogger(CadastrarConhecimentoService.class);
 
     private final RepositorioDocumentoPort repositorio;
+    private final RepositorioVetorialPort vetorial;
     private final AnalisadorConteudoPort analisador;
-    private final IndexacaoDocumentoPort indexacao;
+    private final DivisorTexto divisor;
+    private final IndexarDocumentoService indexacao;
+    private final PublicarDocumentoService publicacao;
     private final ModeloEmbedding modeloEmbedding;
     private final Clock relogio;
 
-    public CadastrarConhecimentoService(RepositorioDocumentoPort repositorio, AnalisadorConteudoPort analisador,
-            IndexacaoDocumentoPort indexacao, ModeloEmbedding modeloEmbedding, Clock relogio) {
+    public CadastrarConhecimentoService(RepositorioDocumentoPort repositorio, RepositorioVetorialPort vetorial,
+            AnalisadorConteudoPort analisador, DivisorTexto divisor, IndexarDocumentoService indexacao,
+            PublicarDocumentoService publicacao, ModeloEmbedding modeloEmbedding, Clock relogio) {
         this.repositorio = repositorio;
+        this.vetorial = vetorial;
         this.analisador = analisador;
+        this.divisor = divisor;
         this.indexacao = indexacao;
+        this.publicacao = publicacao;
         this.modeloEmbedding = modeloEmbedding;
         this.relogio = relogio;
     }
@@ -74,28 +87,37 @@ public final class CadastrarConhecimentoService {
             return emRevisao;
         }
 
+        // Pode lançar DocumentoGrandeDemaisException: acontece antes de gravar qualquer coisa.
+        List<Trecho> trechos = divisor.dividir(id, texto);
+
         Documento processando = Documento.emProcessamento(id, comando.titulo(), texto, comando.fonte(),
                 comando.categoria(), hash, modeloEmbedding.nome(), comando.vigenteAte(),
                 comando.cadastradoPor(), agora);
         repositorio.inserir(processando);
-        return indexar(processando);
+        return indexarEPublicar(processando, trechos);
     }
 
-    private Documento indexar(Documento processando) {
+    private Documento indexarEPublicar(Documento processando, List<Trecho> trechos) {
         try {
-            int trechos = indexacao.indexar(processando);
-            Documento publicado = processando.publicar(trechos);
-            repositorio.atualizarEstado(publicado);
-            log.info("Conhecimento publicado. conhecimentoId={} trechos={}", publicado.id(), trechos);
+            indexacao.indexar(processando, trechos);
+            Documento publicado = publicacao.publicar(processando, trechos.size());
+            log.info("Conhecimento publicado. conhecimentoId={} trechos={}", publicado.id(), trechos.size());
             return publicado;
         } catch (RuntimeException falha) {
             log.warn("Falha ao indexar o conhecimento. conhecimentoId={}", processando.id(), falha);
-            marcarErro(processando, falha);
+            compensar(processando, falha);
             throw new IndexacaoFalhouException(processando.id(), falha);
         }
     }
 
-    private void marcarErro(Documento processando, RuntimeException falhaOriginal) {
+    /** Apaga os trechos já gravados e registra o erro. Falhas aqui não escondem a causa original. */
+    private void compensar(Documento processando, RuntimeException falhaOriginal) {
+        try {
+            vetorial.removerPorDocumento(processando.id());
+        } catch (RuntimeException falhaAoRemover) {
+            falhaOriginal.addSuppressed(falhaAoRemover);
+            log.error("Não foi possível apagar os trechos. conhecimentoId={}", processando.id(), falhaAoRemover);
+        }
         try {
             repositorio.atualizarEstado(processando.falharProcessamento());
         } catch (RuntimeException falhaAoMarcar) {

@@ -1,4 +1,4 @@
-# AGENTS.md — Instruções operacionais para agentes de codificação
+﻿# AGENTS.md — Instruções operacionais para agentes de codificação
 
 Este arquivo vale para todo agente de codificação (e para toda pessoa) que trabalhar no COTI AI Atendimento. Ele diz **como** trabalhar. As regras de **o que** o sistema deve ser estão em [`specs/01-constitution.md`](specs/01-constitution.md), que tem precedência sobre este arquivo em caso de conflito.
 
@@ -29,10 +29,10 @@ Consulte a skill da área antes de começar a tarefa. Mais de uma pode se aplica
 
 | Skill | Quando usar |
 |---|---|
-| [`skills/spring-ai/SKILL.md`](skills/spring-ai/SKILL.md) | `ChatClient`, `EmbeddingModel`, prompts, configuração da OpenAI, saída estruturada. |
-| [`skills/mcp-integration/SKILL.md`](skills/mcp-integration/SKILL.md) | Servidor MCP na `api-conhecimento`, cliente MCP na `api-atendimentos`, transporte Streamable HTTP. |
-| [`skills/rag-pgvector/SKILL.md`](skills/rag-pgvector/SKILL.md) | Ingestão, chunking, `VectorStore`, esquema e busca no pgvector. |
-| [`skills/testing/SKILL.md`](skills/testing/SKILL.md) | Testes unitários, de integração, de contrato, Testcontainers e eval. |
+| [`.claude/skills/spring-ai/SKILL.md`](.claude/skills/spring-ai/SKILL.md) | `ChatClient`, `EmbeddingModel`, prompts, configuração da OpenAI, saída estruturada. |
+| [`.claude/skills/mcp-integration/SKILL.md`](.claude/skills/mcp-integration/SKILL.md) | Servidor MCP na `api-conhecimento`, cliente MCP na `api-atendimentos`, transporte Streamable HTTP. |
+| [`.claude/skills/rag-pgvector/SKILL.md`](.claude/skills/rag-pgvector/SKILL.md) | Ingestão, chunking, `VectorStore`, esquema e busca no pgvector. |
+| [`.claude/skills/testing/SKILL.md`](.claude/skills/testing/SKILL.md) | Testes unitários, de integração, de contrato, Testcontainers e eval. |
 
 Uma skill não substitui a documentação oficial atual. Nome de classe, propriedade ou método do Spring AI, do MCP ou do Spring Boot que você não conferiu deve ser dito como não conferido.
 

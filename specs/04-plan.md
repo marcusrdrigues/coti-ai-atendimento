@@ -58,7 +58,21 @@ Preenchida pelas tarefas T002 e T006 em 2026-10-22, consultando o Docker Hub e o
 | Artefato do MCP Client | **`org.springframework.ai:spring-ai-starter-mcp-client`** (transporte Streamable HTTP via `spring-ai-autoconfigure-mcp-client-httpclient`, cliente HTTP do JDK). A variante `-webflux` não é usada | POM do starter 2.0.1 e listagem do Maven Central |
 | MCP Server | `org.springframework.ai:spring-ai-starter-mcp-server-webmvc` | Listagem do Maven Central |
 
-Ainda a conferir em tarefas posteriores (spikes T031, T037, T044, T061): detalhes de API do Spring AI listados em `03-architecture.md` §15.
+### Confirmações do spike T031 (Spring AI 2.0.1, concluído em 2026-10-26)
+
+Cada item foi comprovado por teste contra PostgreSQL real, versionado em `PgVectorStoreComportamentoIT` (falha se uma atualização da biblioteca mudar o comportamento).
+
+| Pergunta | Resultado |
+|---|---|
+| Tipo da coluna `metadata` | `json` (não `jsonb`). Números continuam números no JSON (`vigenteAte` e `ordem` inteiros). Para alterar um campo sem perder os demais: `jsonb_set(metadata::jsonb, ...)::json` |
+| `vectorStore.delete(Filter.Expression)` | Aceita a expressão montada por `FilterExpressionBuilder` (`eq("documentoId", id)`) e apaga só os trechos do documento. A variante com expressão em texto também funciona |
+| `add()` com id já existente | Atualiza a linha em vez de duplicar. Com o id determinístico (`IdTrecho`), regravar um lote é idempotente |
+| O que vira embedding | Só o texto do trecho; os metadados não entram no vetor |
+| Dimensão gravada | 1536, igual à migração V3 |
+| Lotes grandes | O `BatchingStrategy` do Spring AI quebra um `add()` grande em várias chamadas ao provedor por limite de tokens |
+| Novas tentativas | O Spring Framework 7 traz `org.springframework.core.retry.RetryTemplate` (sem dependência extra). Decisão: `max-retries: 0` no SDK da OpenAI e a política fica no código (`PoliticaNovasTentativas`), só para falha transitória (429, 5xx, 408, erro de E/S), com backoff exponencial e variação aleatória. Descartada a dependência `spring-retry`: o recurso já está no framework |
+
+Ainda a conferir em tarefas posteriores (spikes T037, T044, T061): detalhes de API do Spring AI listados em `03-architecture.md` §15.
 
 ---
 
@@ -224,9 +238,8 @@ curl -i http://localhost:8082/actuator/health
 
 **Classes esperadas.**
 - `dominio`: `DivisorTexto`, `ConfiguracaoDivisao`, `Trecho`, `IdTrecho` (UUID v5), `VigenciaMetadado` (inteiro `AAAAMMDD`, `99991231`); `excecao.DocumentoGrandeDemaisException`, `ModeloIndisponivelException`
-- `aplicacao`: `CadastrarConhecimentoService` (caminho feliz e compensação), `LimpezaDocumentosInterrompidos`; `porta.RepositorioVetorialPort`, `porta.PublicacaoPort`
-- `infraestrutura.vetorial`: `PgVectorRepositorioAdapter`, `MetadadosTrecho`, `PublicacaoJdbcAdapter`
-- `infraestrutura.resiliencia`: `PoliticaNovasTentativas` (backoff exponencial com variação)
+- `aplicacao`: `CadastrarConhecimentoService` (caminho feliz e compensação), `IndexarDocumentoService`, `PublicarDocumentoService`, `PoliticaNovasTentativas` (backoff exponencial com variação), `RecolherDocumentosInterrompidosService`; `porta.RepositorioVetorialPort`
+- `infraestrutura.vetorial`: `PgVectorRepositorioAdapter`, `TradutorFalhasEmbedding`; `infraestrutura.persistencia`: `LimpezaDocumentosInterrompidos`; `infraestrutura.config`: `IndexacaoConfig`
 - Testes: `DivisorTextoTest`, `IdTrechoTest`, `EmbeddingModelFalso` (`@TestConfiguration`), `PgVectorRepositorioAdapterIT`, `PublicacaoAtomicaIT`, `CadastroCompletoIT`, `LimpezaDocumentosInterrompidosIT`, `PoliticaNovasTentativasTest`
 
 **Critérios de aceite.**

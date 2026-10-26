@@ -42,6 +42,8 @@ class AnalisadorConteudoRegexTest {
                 new PropriedadesConhecimento.Web(1000),
                 new PropriedadesConhecimento.Embedding("modelo"),
                 new PropriedadesConhecimento.Analise(PADROES_REAIS, dominiosEmail, telefones),
+                new PropriedadesConhecimento.Divisao(1500, 200, 50, 500),
+                new PropriedadesConhecimento.Embeddings(100, 2, java.time.Duration.ofMillis(1), 2, java.time.Duration.ofMillis(5), java.time.Duration.ZERO),
                 false));
     }
 

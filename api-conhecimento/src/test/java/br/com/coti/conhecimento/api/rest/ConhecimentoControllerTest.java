@@ -4,10 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.not;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -15,7 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import br.com.coti.conhecimento.aplicacao.porta.IndexacaoDocumentoPort;
+import br.com.coti.conhecimento.suporte.EmbeddingModelFalso;
 import br.com.coti.conhecimento.suporte.ChavesTeste;
 import br.com.coti.conhecimento.suporte.TesteWeb;
 import java.time.LocalDate;
@@ -25,7 +21,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import tools.jackson.databind.json.JsonMapper;
@@ -40,14 +35,16 @@ class ConhecimentoControllerTest {
     @Autowired
     private JdbcClient jdbc;
 
-    @MockitoBean
-    private IndexacaoDocumentoPort indexacao;
+    @Autowired
+    private EmbeddingModelFalso embeddings;
 
     private final JsonMapper json = JsonMapper.builder().build();
 
     @BeforeEach
     void limpar() {
         jdbc.sql("DELETE FROM documento").update();
+        jdbc.sql("DELETE FROM vector_store").update();
+        embeddings.reiniciar();
     }
 
     private static String conteudoUnico() {
@@ -84,13 +81,11 @@ class ConhecimentoControllerTest {
 
     @Test
     void deveCadastrarERetornar201ComLocation() throws Exception {
-        when(indexacao.indexar(any())).thenReturn(3);
-
         String resposta = postar(corpoValido())
                 .andExpect(status().isCreated())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.status").value("PUBLICADO"))
-                .andExpect(jsonPath("$.quantidadeChunks").value(3))
+                .andExpect(jsonPath("$.quantidadeChunks").value(1))
                 .andExpect(jsonPath("$.modeloEmbedding").value("text-embedding-3-small"))
                 .andExpect(jsonPath("$.cadastradoEm").isNotEmpty())
                 .andExpect(jsonPath("$.pendencias").doesNotExist())
@@ -107,8 +102,6 @@ class ConhecimentoControllerTest {
 
     @Test
     void deveOmitirVigenciaQuandoNaoInformada() throws Exception {
-        when(indexacao.indexar(any())).thenReturn(1);
-
         postar(corpo("Título", conteudoUnico(), "Fonte", "CURSO", null))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.vigenteAte").doesNotExist());
@@ -116,7 +109,6 @@ class ConhecimentoControllerTest {
 
     @Test
     void deveAceitarOsLimitesDeTamanhoDosCampos() throws Exception {
-        when(indexacao.indexar(any())).thenReturn(1);
         String conteudo50 = ("x".repeat(30) + UUID.randomUUID()).substring(0, 50);
 
         postar(corpo("abc", conteudo50, "abc", "CURSO", null)).andExpect(status().isCreated());
@@ -137,7 +129,7 @@ class ConhecimentoControllerTest {
                 .andExpect(jsonPath("$.pendencias[0]").value("POSSIVEL_PROMPT_INJECTION"))
                 .andExpect(header().doesNotExist("Location"));
 
-        verify(indexacao, never()).indexar(any());
+        assertThat(embeddings.chamadas()).isZero();
         assertThat(quantidadeGravada()).isEqualTo(1);
     }
 
@@ -199,7 +191,6 @@ class ConhecimentoControllerTest {
         postar(corpo("Título", conteudoUnico(), "Fonte", "CURSO", "30/06/2027"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.erros[0].campo").value("vigenteAte"));
         // a vigência de hoje ainda vale (igual ou posterior à data atual)
-        when(indexacao.indexar(any())).thenReturn(1);
         postar(corpo("Título", conteudoUnico(), "Fonte", "CURSO", LocalDate.now().toString()))
                 .andExpect(status().isCreated());
     }
@@ -236,7 +227,7 @@ class ConhecimentoControllerTest {
                         .contentType(MediaType.APPLICATION_JSON).content(corpoValido()))
                 .andExpect(status().isUnauthorized());
         assertThat(quantidadeGravada()).isZero();
-        verify(indexacao, never()).indexar(any());
+        assertThat(embeddings.chamadas()).isZero();
     }
 
     @Test
@@ -261,7 +252,6 @@ class ConhecimentoControllerTest {
 
     @Test
     void deveRetornar409ParaConteudoRepetidoMesmoComEspacamentoDiferente() throws Exception {
-        when(indexacao.indexar(any())).thenReturn(1);
         String conteudo = conteudoUnico();
         postar(corpo("Primeiro", conteudo, "Fonte", "CURSO", null)).andExpect(status().isCreated());
 
@@ -282,7 +272,7 @@ class ConhecimentoControllerTest {
                 .andExpect(content().string(not(containsString("529.982.247-25"))));
 
         assertThat(quantidadeGravada()).isZero();
-        verify(indexacao, never()).indexar(any());
+        assertThat(embeddings.chamadas()).isZero();
     }
 
     @Test
@@ -298,7 +288,7 @@ class ConhecimentoControllerTest {
 
     @Test
     void deveRetornar503ComConhecimentoIdQuandoAIndexacaoFalha() throws Exception {
-        when(indexacao.indexar(any())).thenThrow(new IllegalStateException("embedding indisponível"));
+        embeddings.falharSempre(EmbeddingModelFalso::credencialRecusada);
 
         String resposta = postar(corpoValido())
                 .andExpect(status().isServiceUnavailable())
@@ -318,7 +308,6 @@ class ConhecimentoControllerTest {
 
     @Test
     void listagemNaoVazaConteudoNemPendenciasVazias() throws Exception {
-        when(indexacao.indexar(any())).thenReturn(1);
         postar(corpoValido()).andExpect(status().isCreated());
 
         mvc.perform(get("/api/conhecimentos").header("X-Api-Key", ChavesTeste.ADMIN))

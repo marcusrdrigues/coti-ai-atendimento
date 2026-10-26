@@ -23,6 +23,8 @@ class LimiteTamanhoCorpoFilterTest {
                     new PropriedadesConhecimento.Web(LIMITE),
                     new PropriedadesConhecimento.Embedding("modelo-de-teste"),
                     new PropriedadesConhecimento.Analise(java.util.List.of("x"), java.util.List.of(), java.util.List.of()),
+                    new PropriedadesConhecimento.Divisao(1500, 200, 50, 500),
+                    new PropriedadesConhecimento.Embeddings(100, 2, java.time.Duration.ofMillis(1), 2, java.time.Duration.ofMillis(5), java.time.Duration.ZERO),
                     false),
             new EscritorProblema(JsonMapper.builder().build()));
 
