@@ -158,3 +158,15 @@ scripts/remover-conhecimento.sh <id-do-documento>
 ## Limites de requisição
 
 `POST /api/atendimentos/perguntar`: 10 por minuto por IP. `POST /api/conhecimentos`: 30 por minuto por credencial. `POST /api/conhecimentos/diagnostico/busca`: 10 por minuto por credencial. Acima disso a resposta é `429` com `Retry-After`. Os limites são em memória e por instância.
+
+## Verificação de segredos
+
+O [gitleaks](https://github.com/gitleaks/gitleaks) (licença MIT) procura chaves, senhas e tokens no código e no histórico. A configuração do repositório é o `.gitleaks.toml` (regras padrão, sem exceções). O `.env` nunca vai para o git: está no `.gitignore`, e só o `.env.example` (sem valores) é versionado.
+
+Instalação no Windows: `winget install Gitleaks.Gitleaks` (abra um terminal novo depois). Varredura do histórico inteiro, com o valor mascarado:
+
+```bash
+gitleaks git --config .gitleaks.toml --redact --no-banner
+```
+
+Para bloquear o commit que contém segredo, use um hook de `pre-commit` que rode `gitleaks git --pre-commit --staged --redact --no-banner`. O repositório não versiona o hook (ele fica no `core.hooksPath` de cada pessoa); quem clonar precisa configurar o seu. Um falso positivo se resolve com o comentário `gitleaks:allow` na linha. Não use `--no-verify` para pular o hook. A etapa no CI ainda não existe, porque o repositório ainda não tem CI.

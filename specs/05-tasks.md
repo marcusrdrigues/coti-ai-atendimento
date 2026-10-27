@@ -164,7 +164,7 @@ Legenda: `CON` = `api-conhecimento`, `ATE` = `api-atendimentos`, `INF` = infraes
   Dep.: T036, T061. Verificação: teste passa.
 - [ ] **T065** `ATE` `CON` — `PropagacaoTraceIT`: o mesmo trace id nos logs da ATE e da CON para uma pergunta.
   Dep.: T053. Verificação: teste passa.
-- [ ] **T066** `INF` — Propor verificador de segredos (ferramenta, licença, manutenção) e, após aprovação, configurar no repositório.
+- [x] **T066** `INF` — Propor verificador de segredos (ferramenta, licença, manutenção) e, após aprovação, configurar no repositório.
   Dep.: —. Verificação: aprovação registrada; verificação sem achados.
 - [ ] **T067** `INF` — Obter da COTI os documentos oficiais públicos para a base inicial (cursos, programas, modalidades, pré-requisitos, institucional).
   Dep.: —. Verificação: documentos recebidos e revisados quanto a dados pessoais.

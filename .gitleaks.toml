@@ -1,0 +1,8 @@
+# Configuração do gitleaks (T066, Artigo 9 da constituição: segredo nunca entra no repositório).
+# Usa todas as regras padrão da ferramenta. O repositório é público, então não há lista de exceções:
+# os valores falsos de teste (`ChavesTeste`) não têm formato de chave real e não disparam nenhuma regra.
+# Se um falso positivo aparecer, prefira marcar a linha com o comentário `gitleaks:allow` a abrir uma exceção aqui.
+title = "COTI AI Atendimento"
+
+[extend]
+useDefault = true
