@@ -17,6 +17,22 @@ spring:
     deserialization:
       fail-on-unknown-properties: true
   ai:
+    mcp:
+      client:
+        name: coti-atendimentos
+        version: 1.0.0
+        type: SYNC
+        # false: o cliente só se conecta na primeira chamada e se reconecta sozinho quando a api-conhecimento volta.
+        # Com o padrão (true) a api-atendimentos NÃO sobe se a api-conhecimento estiver fora do ar (spike T044).
+        initialized: false
+        request-timeout: ${CONHECIMENTO_MCP_TIMEOUT:5s} # o padrão do Spring AI (20 s) é alto demais para atendimento
+        toolcallback:
+          enabled: false # o modelo não recebe a ferramenta: é o código que chama a busca (ADR-06)
+        streamable-http:
+          connections:
+            conhecimento:
+              url: ${CONHECIMENTO_MCP_URL}
+              endpoint: /mcp
     model:
       embedding: none # Artigo 6: embeddings só existem na api-conhecimento
     openai:
@@ -32,11 +48,31 @@ coti:
   atendimentos:
     seguranca:
       monitoramento-api-key: ${MONITORAMENTO_API_KEY}
+      mcp-api-key: ${CONHECIMENTO_MCP_API_KEY} # chave de serviço enviada à api-conhecimento (Bearer)
     openai:
       api-key: ${OPENAI_API_KEY} # só validação de presença; o Spring AI lê spring.ai.openai.api-key
       chat-model: ${OPENAI_CHAT_MODEL}
+    conhecimento:
+      url: ${CONHECIMENTO_MCP_URL} # só validação de presença; o cliente MCP lê spring.ai.mcp.client
+    mensagens: # RF10: a resposta sem evidência é a mensagem seguida do canal humano, nunca texto do modelo
+      sem-evidencia: ${ATENDIMENTO_MENSAGEM_SEM_EVIDENCIA}
+      canal-humano: ${ATENDIMENTO_CANAL_HUMANO}
     web:
       limite-corpo-bytes: 262144 # 256 KB
+    busca:
+      limite: 5
+      limiar-similaridade: 0.70 # igual ao do servidor; defesa em profundidade
+    resiliencia:
+      mcp-tempo-limite: ${CONHECIMENTO_MCP_TIMEOUT:5s}
+      mcp-novas-tentativas: 2 # só para timeout e conexão; a ferramenta é de leitura e idempotente
+      prazo-total: 30s
+      retry-after: 30s
+      atraso-inicial: 200ms
+      multiplicador: 2
+      atraso-maximo: 2s
+      jitter: 100ms
+      saude-tempo-limite: 2s
+      saude-validade: 10s # o health público não pode virar uma chamada ao MCP por requisição
     documentacao-publica: false
 
 management:
@@ -51,6 +87,11 @@ management:
       show-details: when-authorized
       show-components: when-authorized
       roles: MONITORAMENTO
+      status:
+        # DEGRADADO: a api-conhecimento está fora, mas o serviço responde (200). Fica abaixo de DOWN e acima de UP.
+        order: DOWN,OUT_OF_SERVICE,DEGRADADO,UP,UNKNOWN
+        http-mapping:
+          DEGRADADO: 200
 
 springdoc:
   api-docs:

@@ -1,10 +1,14 @@
 package br.com.coti.atendimentos.infraestrutura.config;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
+import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.validation.annotation.Validated;
@@ -18,7 +22,11 @@ import org.springframework.validation.annotation.Validated;
 public record PropriedadesAtendimentos(
         @Valid @NotNull Seguranca seguranca,
         @Valid @NotNull OpenAi openai,
+        @Valid @NotNull Conhecimento conhecimento,
+        @Valid @NotNull Mensagens mensagens,
         @Valid @DefaultValue Web web,
+        @Valid @DefaultValue Busca busca,
+        @Valid @DefaultValue Resiliencia resiliencia,
         @DefaultValue("false") boolean documentacaoPublica) {
 
     /**
@@ -30,11 +38,14 @@ public record PropriedadesAtendimentos(
     public record Seguranca(
             @NotBlank(message = "defina a variável de ambiente MONITORAMENTO_API_KEY")
             @Pattern(regexp = SEM_PLACEHOLDER, message = "defina a variável de ambiente MONITORAMENTO_API_KEY")
-            String monitoramentoApiKey) {
+            String monitoramentoApiKey,
+            @NotBlank(message = "defina a variável de ambiente CONHECIMENTO_MCP_API_KEY")
+            @Pattern(regexp = SEM_PLACEHOLDER, message = "defina a variável de ambiente CONHECIMENTO_MCP_API_KEY")
+            String mcpApiKey) {
 
         @Override
         public String toString() {
-            return "Seguranca[monitoramentoApiKey=***]";
+            return "Seguranca[monitoramentoApiKey=***, mcpApiKey=***]";
         }
     }
 
@@ -57,6 +68,46 @@ public record PropriedadesAtendimentos(
         }
     }
 
+    /** Apenas valida a presença do endereço do servidor MCP; quem o usa é o cliente MCP do Spring AI. */
+    public record Conhecimento(
+            @NotBlank(message = "defina a variável de ambiente CONHECIMENTO_MCP_URL")
+            @Pattern(regexp = SEM_PLACEHOLDER, message = "defina a variável de ambiente CONHECIMENTO_MCP_URL")
+            String url) {
+    }
+
+    /**
+     * Texto devolvido quando não há evidência (RF10). A resposta é a mensagem seguida do canal humano; os dois vêm
+     * de configuração, nunca do modelo (RN10.2).
+     */
+    public record Mensagens(
+            @NotBlank(message = "defina a variável de ambiente ATENDIMENTO_MENSAGEM_SEM_EVIDENCIA")
+            @Pattern(regexp = SEM_PLACEHOLDER, message = "defina a variável de ambiente ATENDIMENTO_MENSAGEM_SEM_EVIDENCIA")
+            String semEvidencia,
+            @NotBlank(message = "defina a variável de ambiente ATENDIMENTO_CANAL_HUMANO")
+            @Pattern(regexp = SEM_PLACEHOLDER, message = "defina a variável de ambiente ATENDIMENTO_CANAL_HUMANO")
+            String canalHumano) {
+    }
+
     public record Web(@Positive @DefaultValue("262144") long limiteCorpoBytes) {
+    }
+
+    /** Busca na base (RF07). O limiar repete o do servidor, como defesa em profundidade (contrato, seção 6.3). */
+    public record Busca(
+            @Positive @DefaultValue("5") int limite,
+            @DecimalMin("0.0") @DecimalMax("1.0") @DefaultValue("0.70") double limiarSimilaridade) {
+    }
+
+    /** Tempos e novas tentativas (RNF04, ADR-13). O backoff é exponencial com variação aleatória. */
+    public record Resiliencia(
+            @DefaultValue("5s") Duration mcpTempoLimite,
+            @PositiveOrZero @DefaultValue("2") int mcpNovasTentativas,
+            @DefaultValue("30s") Duration prazoTotal,
+            @DefaultValue("30s") Duration retryAfter,
+            @DefaultValue("200ms") Duration atrasoInicial,
+            @Positive @DefaultValue("2") double multiplicador,
+            @DefaultValue("2s") Duration atrasoMaximo,
+            @DefaultValue("100ms") Duration jitter,
+            @DefaultValue("2s") Duration saudeTempoLimite,
+            @DefaultValue("10s") Duration saudeValidade) {
     }
 }

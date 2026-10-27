@@ -14,30 +14,18 @@ import br.com.coti.atendimentos.suporte.ChavesTeste;
 import br.com.coti.atendimentos.suporte.TesteWeb;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.RequestDispatcher;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
-import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.autoconfigure.error.BasicErrorController;
 import org.springframework.context.ApplicationContext;
-import org.springframework.context.annotation.Import;
+import br.com.coti.atendimentos.aplicacao.ResponderPerguntaService;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
-import org.springframework.stereotype.Controller;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseBody;
 
-/**
- * Testa o tratamento de erros pela única rota pública da API. O controlador de teste substitui, nesta classe,
- * o controlador real da Fase 6; ele deixa de existir quando o real for criado.
- */
+/** Testa o tratamento de erros pela única rota pública da API, com o caso de uso substituído por dublê. */
 @TesteWeb
-@Import(ManipuladorErrosRestTest.ControladorDeTeste.class)
 class ManipuladorErrosRestTest {
 
     private static final String ROTA = "/api/atendimentos/perguntar";
@@ -48,23 +36,8 @@ class ManipuladorErrosRestTest {
     @Autowired
     private ApplicationContext contexto;
 
-    /** Controlador só de teste: importado só por esta classe (classes internas de teste não entram na varredura). */
-    @Controller
-    @RequestMapping(ROTA)
-    @ResponseBody
-    static class ControladorDeTeste {
-
-        record Entrada(@NotBlank @Size(max = 5) String pergunta) {
-        }
-
-        @PostMapping
-        Map<String, String> perguntar(@Valid @RequestBody Entrada entrada) {
-            if ("boom".equals(entrada.pergunta())) {
-                throw new IllegalStateException("detalhe-interno-que-nao-pode-vazar");
-            }
-            return Map.of("pergunta", entrada.pergunta());
-        }
-    }
+    @MockitoBean
+    private ResponderPerguntaService servico;
 
     private ResultActions postarJson(String corpo) throws Exception {
         return mvc.perform(post(ROTA).contentType(MediaType.APPLICATION_JSON).content(corpo));
@@ -72,7 +45,7 @@ class ManipuladorErrosRestTest {
 
     @Test
     void deveDevolverProblemDetailsComExtensoesDoContratoEmErroDeValidacao() throws Exception {
-        postarJson("{\"pergunta\":\"pergunta-muito-longa-secreta\"}")
+        postarJson("{\"pergunta\":\"secreta" + "x".repeat(1_001) + "\"}")
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(header().exists("X-Correlation-Id"))
@@ -136,6 +109,8 @@ class ManipuladorErrosRestTest {
 
     @Test
     void deveDevolver500GenericoSemDetalheInterno() throws Exception {
+        org.mockito.Mockito.when(servico.responder(org.mockito.ArgumentMatchers.any()))
+                .thenThrow(new IllegalStateException("detalhe-interno-que-nao-pode-vazar"));
         postarJson("{\"pergunta\":\"boom\"}")
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.codigo").value("ERRO_INTERNO"))

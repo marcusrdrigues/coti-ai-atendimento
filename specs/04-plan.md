@@ -87,7 +87,27 @@ Comprovadas em `ScoreCossenoIT`, com trechos de cosseno exato em relação à pe
 | Decisão | Toda conexão da aplicação roda `SET hnsw.iterative_scan = strict_order` (`spring.datasource.hikari.connection-init-sql`; `strict_order` mantém a ordem exata). Descartado: `ALTER ROLE ... SET`, que exige privilégio que o papel dono não tem, e `SET LOCAL` em cada busca, que exigiria transação em torno de cada consulta |
 | Limite do achado | O scan iterativo reduz a perda, mas o HNSW é aproximado: depois de muita inserção e remoção sem `VACUUM` o grafo degrada. Em produção o autovacuum cuida disso; o script de remoção de documentos deve rodar `VACUUM` ao final. A nota de recuperação só sai do eval da Fase 8 |
 
-Ainda a conferir em tarefas posteriores (spikes T044 e T061): detalhes de API do Spring AI listados em `03-architecture.md` §15.
+**Correção do spike T031 (achada na T053, 2026-10-27).** A linha "O que vira embedding: só o texto do trecho" valia só para o dublê de embeddings dos testes. Com o `OpenAiEmbeddingModel` real o padrão é `MetadataMode.EMBED`: o texto enviado ao provedor leva os metadados (ids, `status`, datas) e, mesmo com `metadata-mode: NONE`, um prefixo `"\n\n"` do formatador padrão. Corrigido de dois modos: `spring.ai.openai.embedding.metadata-mode: NONE` e um `ContentFormatter` por `Document` (`PgVectorRepositorioAdapter.SOMENTE_O_TEXTO`) que devolve só o texto em qualquer modo. Travado por `PgVectorRepositorioAdapterFormatoTest` e, de ponta a ponta, por `ServicosIntegradosIT`. Os trechos já cadastrados antes desta correção (nenhum em produção) teriam de ser reindexados.
+
+### Confirmações do spike T044 (cliente MCP, Spring AI 2.0.1 e MCP Java SDK 2.0.0, 2026-10-27)
+
+| Pergunta | Resultado |
+|---|---|
+| Artefato | `spring-ai-starter-mcp-client` (traz `spring-ai-autoconfigure-mcp-client-httpclient`, transporte Streamable HTTP pelo cliente HTTP do JDK, sem WebFlux) |
+| Como obter o cliente | A autoconfiguração publica um bean `List<McpSyncClient>` (`mcpSyncClients`), um cliente por conexão configurada; não há bean individual. O adaptador recebe a lista e exige exatamente 1 |
+| Propriedades | `spring.ai.mcp.client.{name,version,type,initialized,request-timeout,toolcallback.enabled}` e `spring.ai.mcp.client.streamable-http.connections.<nome>.{url,endpoint}` |
+| Chamar a ferramenta | `cliente.callTool(new CallToolRequest("buscar_conhecimento", Map.of("pergunta", ..., "limite", 5)))` devolve `CallToolResult` (`isError()`, `structuredContent()`, `content()`) |
+| Sem ToolCallback | Com `toolcallback.enabled: false` nenhum `ToolCallbackProvider` é registrado: o modelo não recebe a ferramenta |
+| **`initialized` e a subida** | **Com o padrão (`true`) a aplicação NÃO sobe com a api-conhecimento desligada** (`Client failed to initialize by explicit API call`, causa `ConnectException`). Com `initialized: false` ela sobe, a primeira chamada abre a sessão sozinha e, se o servidor está fora, falha em ~200 ms com `RuntimeException` (causa `ConnectException`); quando o servidor volta, a chamada seguinte funciona sem reiniciar o serviço |
+| Cabeçalhos | Um bean `McpSyncHttpClientRequestCustomizer` (`customize(HttpRequest.Builder, método, URI, corpo, McpTransportContext)`) é aplicado pela autoconfiguração a toda requisição HTTP e é onde entram `Authorization: Bearer` e `traceparent`. Ele roda em threads do cliente HTTP, **sem o MDC** da requisição original |
+| Trace | Um bean `McpClientCustomizer<McpClient.SyncSpec>` define `transportContextProvider(...)`, avaliado na thread que chama `callTool`; ali o trace id do MDC vira `McpTransportContext`, que o customizador de cabeçalhos lê. Como a chamada do adaptador roda em outra thread (para o limite de tempo), o MDC é copiado para ela |
+| Exceções do cliente | 401 e 403 → `McpHttpClientTransportAuthorizationException`; timeout do SDK → `ReactiveException` com `TimeoutException`; servidor fora → `RuntimeException` com `ConnectException`; HTTP 500 → `RuntimeException` genérica; sessão perdida (o servidor reiniciou) → `RuntimeException("MCP session with server terminated")` sem tipo próprio |
+| **Não interromper o cliente** | Interromper (`Future.cancel(true)`) uma chamada durante a conexão inicial preguiçosa **deixa o cliente travado**: as chamadas seguintes nunca terminam. Timeout do próprio SDK não tem esse efeito. Por isso o adaptador não interrompe a thread; ela termina pelo `request-timeout` do SDK |
+| Sessão perdida | Depois de o servidor reiniciar, a primeira chamada falha e o SDK reabre a sessão na seguinte. O adaptador repete qualquer falha de transporte (até 2 vezes), então a mesma pergunta se recupera sozinha |
+| Status customizado do Actuator | `management.endpoint.health.status.order=DOWN,OUT_OF_SERVICE,DEGRADADO,UP,UNKNOWN` e `management.endpoint.health.status.http-mapping.DEGRADADO=200` funcionam. O agregador escolhe o pior status pela ordem: um componente `DOWN` derrubaria o serviço, então o `conhecimentoMcp` reporta `DEGRADADO` (e não `DOWN`) quando a base está fora |
+| Pacotes de saúde no Boot 4 | `org.springframework.boot.health.contributor.{Health, HealthIndicator, Status}` |
+
+Ainda a conferir em tarefas posteriores (spike T061): detalhes de API do Spring AI listados em `03-architecture.md` §15.
 
 ### Confirmações do MCP Server (T040–T042, Spring AI 2.0.1 e MCP Java SDK 2.0.0, 2026-10-27)
 

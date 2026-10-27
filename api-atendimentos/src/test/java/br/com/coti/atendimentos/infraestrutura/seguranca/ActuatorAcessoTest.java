@@ -8,15 +8,26 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import br.com.coti.atendimentos.suporte.ChavesTeste;
+import br.com.coti.atendimentos.suporte.ServidorMcpDeTeste;
 import br.com.coti.atendimentos.suporte.TesteWeb;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 @TesteWeb
 class ActuatorAcessoTest {
+
+    /** Servidor MCP de teste no ar: com ele o status agregado é UP; sem ele seria DEGRADADO (HealthDegradadoIT). */
+    static final ServidorMcpDeTeste SERVIDOR_MCP = ServidorMcpDeTeste.iniciar();
+
+    @DynamicPropertySource
+    static void servidorMcp(DynamicPropertyRegistry registro) {
+        registro.add("CONHECIMENTO_MCP_URL", SERVIDOR_MCP::url);
+    }
 
     @Autowired
     private MockMvc mvc;

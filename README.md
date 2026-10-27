@@ -7,7 +7,7 @@ Plataforma de atendimento inteligente para alunos da COTI Informática, formada 
 
 A especificação completa está em [`specs/`](specs/) (constituição, requisitos, arquitetura, plano, tarefas e contratos). Agentes de codificação seguem o [`AGENTS.md`](AGENTS.md).
 
-> Estado atual: Fases 1 a 5 concluídas (banco em Docker, os dois serviços com segurança, erros padronizados, Actuator e OpenAPI, e na `api-conhecimento` o cadastro com divisão em trechos, embeddings e publicação sem estado parcial, mais a consulta, a busca semântica, a ferramenta MCP `buscar_conhecimento` e o diagnóstico da busca). Cadastro e busca chamam a OpenAI de verdade (`text-embedding-3-small`); sem uma `OPENAI_API_KEY` válida terminam em `503 MODELO_INDISPONIVEL`. O cliente MCP e a API de atendimento chegam na Fase 6; acompanhe em [`specs/05-tasks.md`](specs/05-tasks.md).
+> Estado atual: Fases 1 a 6 concluídas. A `api-conhecimento` cadastra, divide e indexa documentos, busca por similaridade e expõe a ferramenta MCP `buscar_conhecimento`. A `api-atendimentos` recebe a pergunta, mascara dados pessoais, chama a ferramenta MCP, responde "sem evidência" quando a base não tem o assunto e devolve `503` com `Retry-After` quando uma dependência falha; ela sobe mesmo com a `api-conhecimento` fora do ar (saúde `DEGRADADO`). Uma pergunta que encontra trechos ainda termina em `503 MODELO_INDISPONIVEL`, porque a geração da resposta com o modelo de IA chega na Fase 7. Cadastro e busca chamam a OpenAI de verdade (`text-embedding-3-small`); acompanhe em [`specs/05-tasks.md`](specs/05-tasks.md).
 
 ## Ambiente local
 
@@ -42,6 +42,8 @@ Para subir as APIs (Fase 2) preencha também:
 | `CONHECIMENTO_ADMIN_API_KEY` | Chave administrativa (`X-Api-Key`) da `api-conhecimento` |
 | `MONITORAMENTO_API_KEY` | Chave (`X-Api-Key`) para métricas e detalhes do health |
 | `CONHECIMENTO_MCP_API_KEY` | Chave de serviço (`Authorization: Bearer`) com que a `api-atendimentos` chama a ferramenta MCP da `api-conhecimento`; a chave administrativa não vale em `/mcp` |
+| `ATENDIMENTO_MENSAGEM_SEM_EVIDENCIA` | Texto devolvido ao aluno quando não há evidência na base (`api-atendimentos`), por exemplo `Não encontrei essa informação nos materiais oficiais da COTI.` |
+| `ATENDIMENTO_CANAL_HUMANO` | Canal de atendimento humano, acrescentado à mensagem acima (`api-atendimentos`), por exemplo `Fale com a nossa equipe: https://www.coti.com.br/contato` |
 
 Variável definida no shell tem precedência sobre o `.env` no Docker Compose; confira com `echo` se não quiser que uma chave do seu ambiente seja repassada aos contêineres.
 

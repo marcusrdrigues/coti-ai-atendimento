@@ -371,6 +371,7 @@ spring:
     mcp.client:
       name: coti-atendimentos
       type: SYNC
+      initialized: false                # sobe sem a api-conhecimento e reconecta sozinho (ADR-21)
       request-timeout: ${CONHECIMENTO_MCP_TIMEOUT:5s}
       toolcallback.enabled: false       # o modelo não recebe ferramentas (ADR-06)
       streamable-http.connections.conhecimento:
@@ -630,7 +631,7 @@ flowchart TD
 | `/actuator/metrics`, `/actuator/prometheus` | Sim | Somente com `MONITORAMENTO_API_KEY` |
 | `env`, `configprops`, `beans`, `heapdump`, demais | **Não** expostos | — |
 
-Na `api-atendimentos`, o `ConhecimentoMcpHealthIndicator` (ping/`tools/list`, timeout 2 s) devolve `DOWN` para o componente; o status agregado `DEGRADADO` (HTTP 200) é configurado com `management.endpoint.health.status.order` e `http-mapping` **(conferir** nomes). `liveness` e `readiness` não incluem o indicador do MCP.
+Na `api-atendimentos`, o `ConhecimentoMcpHealthIndicator` (ping/`tools/list`, timeout 2 s) devolve `DEGRADADO` para o componente; o status agregado `DEGRADADO` (HTTP 200) é configurado com `management.endpoint.health.status.order` e `http-mapping` (nomes conferidos no spike T044). `liveness` e `readiness` não incluem o indicador do MCP.
 
 ### 10.5 Logs estruturados e observabilidade
 
@@ -715,6 +716,8 @@ Nenhum destes itens é exigido para rodar localmente, mas **todos** são obrigat
 | ADR-18 | Timeout de 5 s do embedding da pergunta aplicado pela aplicação na busca | Dois `EmbeddingModel` com timeouts diferentes: duplica configuração para resolver só o tempo limite |
 | ADR-19 | Toda conexão da aplicação roda `SET hnsw.iterative_scan = strict_order` (`hikari.connection-init-sql`) | `ALTER ROLE ... SET`: exige privilégio que o papel dono não tem. `SET LOCAL` por busca: exige transação em volta de cada consulta. Busca exata sem índice: perde o ganho do HNSW quando a base crescer |
 | ADR-20 | A chave do `/mcp` é uma terceira credencial (`CONHECIMENTO_MCP_API_KEY`, `Authorization: Bearer`), em cadeia de segurança própria que não aceita a chave administrativa | Reaproveitar a chave administrativa: quem chama o atendimento passaria a poder cadastrar conhecimento. Módulo de segurança MCP da comunidade: dependência nova sem necessidade |
+| ADR-21 | Cliente MCP com `initialized: false`: conecta na primeira chamada e se reabre sozinho; o adaptador repete qualquer falha de transporte (até 2 vezes) e **nunca interrompe** a thread do cliente | `initialized: true` (padrão): a api-atendimentos não sobe com a api-conhecimento fora (RNF07). `Future.cancel(true)`: interromper a conexão inicial trava o cliente para sempre (spike T044). Retry só de timeout e conexão: a sessão perdida após reinício da api-conhecimento vem como `RuntimeException` sem tipo, e o aluno veria 503 |
+| ADR-22 | Só o texto do trecho vira embedding: `metadata-mode: NONE` e um `ContentFormatter` por `Document` | Confiar no padrão do modelo da OpenAI (`EMBED`): acrescenta ids, status e datas ao texto e polui o vetor. Só `metadata-mode: NONE`: ainda deixa um prefixo de quebras de linha |
 
 ---
 

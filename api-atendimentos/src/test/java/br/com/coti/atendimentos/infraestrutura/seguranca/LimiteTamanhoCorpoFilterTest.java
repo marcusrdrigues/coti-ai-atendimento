@@ -18,9 +18,15 @@ class LimiteTamanhoCorpoFilterTest {
 
     private final LimiteTamanhoCorpoFilter filtro = new LimiteTamanhoCorpoFilter(
             new PropriedadesAtendimentos(
-                    new PropriedadesAtendimentos.Seguranca("a"),
+                    new PropriedadesAtendimentos.Seguranca("a", "m"),
                     new PropriedadesAtendimentos.OpenAi("c", "d"),
+                    new PropriedadesAtendimentos.Conhecimento("http://localhost:1"),
+                    new PropriedadesAtendimentos.Mensagens("sem evidencia", "canal"),
                     new PropriedadesAtendimentos.Web(LIMITE),
+                    new PropriedadesAtendimentos.Busca(5, 0.70),
+                    new PropriedadesAtendimentos.Resiliencia(java.time.Duration.ofSeconds(5), 2, java.time.Duration.ofSeconds(30),
+                            java.time.Duration.ofSeconds(30), java.time.Duration.ofMillis(200), 2, java.time.Duration.ofSeconds(2),
+                            java.time.Duration.ofMillis(100), java.time.Duration.ofSeconds(2), java.time.Duration.ofSeconds(10)),
                     false),
             new EscritorProblema(JsonMapper.builder().build()));
 

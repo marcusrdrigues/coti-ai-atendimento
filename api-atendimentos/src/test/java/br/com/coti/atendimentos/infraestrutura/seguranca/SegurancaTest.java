@@ -20,8 +20,8 @@ class SegurancaTest {
 
     @Test
     void rotaPublicaDePerguntasNaoExigeCredencial() throws Exception {
-        // sem controlador na Fase 2 o resultado é 404 (e não 401), o que prova que a segurança deixou passar
-        mvc.perform(post("/api/atendimentos/perguntar")).andExpect(status().isNotFound());
+        // a segurança deixa passar (não é 401): sem corpo JSON o controlador responde 415 do contrato
+        mvc.perform(post("/api/atendimentos/perguntar")).andExpect(status().isUnsupportedMediaType());
     }
 
     @Test
@@ -53,7 +53,7 @@ class SegurancaTest {
         mvc.perform(post("/api/atendimentos/perguntar"))
                 .andExpect(status().is4xxClientError())
                 .andExpect(header().doesNotExist("Set-Cookie"))
-                .andExpect(jsonPath("$.codigo").value("RECURSO_NAO_ENCONTRADO"));
+                .andExpect(jsonPath("$.codigo").value("TIPO_MIDIA_NAO_SUPORTADO"));
     }
 
     @Test

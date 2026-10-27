@@ -51,6 +51,9 @@ spring:
       timeout: ${OPENAI_TIMEOUT:30s}
       max-retries: 0 # novas tentativas ficam na aplicação, em um único ponto (ADR-13)
       embedding:
+        # NONE: só o texto do trecho vira embedding. O padrão do modelo da OpenAI é EMBED, que acrescenta ao texto
+        # os metadados do trecho (ids, status, datas) e polui o vetor. Achado pelo teste entre os dois serviços (T053).
+        metadata-mode: NONE
         model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
         dimensions: ${OPENAI_EMBEDDING_DIMENSIONS:1536}
     vectorstore:

@@ -20,7 +20,7 @@ Convenção: só se registra como "passou" um teste que foi executado, com o com
 | 3 — Persistência e ingestão de conhecimento | **Concluída** | T019–T027 (9/9) | 2026-10-23 |
 | 4 — Chunking e geração de embeddings | **Concluída** | T028–T036 (9/9) | 2026-10-26 |
 | 5 — Busca vetorial e MCP Server | **Concluída** | T037–T043 (7/7) | 2026-10-27 |
-| 6 — MCP Client e API de Atendimentos | Pendente | T044–T053 | — |
+| 6 — MCP Client e API de Atendimentos | **Concluída** | T044–T053 (10/10) | 2026-10-27 |
 | 7 — Integração com OpenAI e contexto RAG | Pendente | T054–T061 | — |
 | 8 — Testes, segurança e observabilidade | Pendente | T062–T075 | — |
 
@@ -501,6 +501,100 @@ Nenhum teste Java foi executado nesta fase: ainda não existe código Java (Fase
 #### Próxima fase
 
 **Fase 6 — MCP Client e API de Atendimentos** (T044–T053). A primeira tarefa é a **T044**, um spike do cliente MCP do Spring AI 2.0.1 na `api-atendimentos` (tipo injetável do `McpSyncClient`, cabeçalhos de credencial e de trace, comportamento com a `api-conhecimento` fora do ar na subida). A chave `CONHECIMENTO_MCP_API_KEY` precisará entrar também no serviço e no Compose da `api-atendimentos`.
+
+---
+
+---
+
+### Fase 6 — MCP Client e API de Atendimentos
+
+**Status:** concluída. **Data:** 2026-10-27. **Tarefas:** T044 a T053 (10 de 10).
+
+#### O que foi entregue
+
+| Tarefa | Resultado |
+|---|---|
+| T044 | Spike do cliente MCP (Spring AI 2.0.1, SDK 2.0.0), com achados que mudaram o desenho: `initialized: false` obrigatório, não interromper o cliente, sessão perdida. Registrado em `04-plan.md` §3 |
+| T045 | Domínio: `PerguntaAluno`, `TrechoConhecimento`, `Fonte`, `ResultadoAtendimento`, `RespostaGerada`, `Prazo`, `Categoria` e as exceções `BaseConhecimentoIndisponivelException`, `ModeloIndisponivelException`, `TempoEsgotadoException`, `PerguntaInvalidaException` |
+| T046 | `MascaradorPort` e `MascaradorDadosPessoaisRegex` (CPF, e-mail e telefone → `[CPF]`, `[EMAIL]`, `[TELEFONE]`) |
+| T047 | `PerguntarRequest`, `RespostaAtendimentoResponse`, `FonteResponse`, `AtendimentoController` e `ManipuladorExcecoesAtendimento` (503 com `Retry-After`) |
+| T048 | `ServidorMcpDeTeste`: servidor MCP mínimo (JDK puro) que segue o contrato §4, com sucesso, vazio, `isError`, fora do schema, lento, 401/403/500, sem ferramenta e sessão perdida |
+| T049 | Cliente MCP configurado (`SYNC`, 5 s, sem `ToolCallback`, `initialized: false`), `McpCabecalhosCustomizer` (Bearer + `traceparent`) e `McpContextoTraceCustomizer` |
+| T050 | `ValidadorResultadoBusca` (rejeita o resultado inteiro) e `BaseConhecimentoMcpAdapter` (chamada determinística, limite de tempo pelo `Prazo`, novas tentativas só para falha de transporte) |
+| T051 | `GeradorRespostaPort` (interface) e `ResponderPerguntaService`: mascarar → buscar → sem trechos = sem evidência; prazo → `TEMPO_ESGOTADO`; falhas → 503 |
+| T052 | `ConhecimentoMcpHealthIndicator` e status agregado `DEGRADADO` (HTTP 200); liveness e readiness independentes |
+| T053 | `ServicosIntegradosIT` e `ChaveMcpErradaIT`: a api-atendimentos contra o JAR real da api-conhecimento, com PostgreSQL e pgvector reais e uma OpenAI falsa só de embeddings |
+
+#### Arquivos criados (em `api-atendimentos/src`)
+
+- `main`: `dominio/{Categoria, PerguntaAluno, TrechoConhecimento, Fonte, ResultadoAtendimento, RespostaGerada, Prazo}`, `dominio/excecao/{BaseConhecimentoIndisponivelException, ModeloIndisponivelException, TempoEsgotadoException, PerguntaInvalidaException}`, `aplicacao/{ResponderPerguntaService, porta/BaseConhecimentoPort, porta/GeradorRespostaPort, porta/MascaradorPort}`, `infraestrutura/mcp/{BaseConhecimentoMcpAdapter, ValidadorResultadoBusca, McpCabecalhosCustomizer, McpContextoTraceCustomizer, ConhecimentoMcpHealthIndicator}`, `infraestrutura/privacidade/MascaradorDadosPessoaisRegex`, `infraestrutura/ia/GeradorRespostaNaoImplementado` (provisório), `infraestrutura/config/AtendimentoConfig`, `api/rest/{AtendimentoController, ManipuladorExcecoesAtendimento}`, `api/rest/dto/{PerguntarRequest, RespostaAtendimentoResponse, FonteResponse}`
+- `test`: `dominio/{PrazoTest, PerguntaAlunoTest}`, `aplicacao/ResponderPerguntaServiceTest`, `infraestrutura/privacidade/MascaradorDadosPessoaisRegexTest`, `infraestrutura/mcp/{ValidadorResultadoBuscaTest, McpCabecalhosCustomizerTest, ConhecimentoMcpHealthIndicatorTest, BaseConhecimentoMcpAdapterIT, HealthDegradadoIT, SubidaSemConhecimentoIT}`, `api/rest/AtendimentoControllerTest`, `integracao/{ServicosIntegradosIT, ChaveMcpErradaIT}`, `suporte/{ServidorMcpDeTeste, ServidorMcpDeTesteTest, TesteComServidorMcp, OpenAiFalsa, AmbienteIntegrado}`
+
+#### Arquivos modificados
+
+- `api-atendimentos/pom.xml`: starter do cliente MCP, `testcontainers-postgresql` (escopo de teste) e o Surefire executando também `*IT`
+- `api-atendimentos/src/main/resources/application.yml`: cliente MCP, `coti.atendimentos.{seguranca.mcp-api-key, conhecimento, mensagens, busca, resiliencia}` e o status `DEGRADADO` do Actuator; `PropriedadesAtendimentos` ampliada
+- `api-conhecimento`: `PgVectorRepositorioAdapter` (formatador de conteúdo só com o texto), `application.yml` (`metadata-mode: NONE`) e o novo `PgVectorRepositorioAdapterFormatoTest` (correção descrita em "Decisões")
+- Testes existentes ajustados: `TesteWeb`, `ChavesTeste`, `InicializacaoSemVariavelTest`, `LimiteTamanhoCorpoFilterTest`, `ActuatorAcessoTest`, `SegurancaTest` (a rota de perguntas agora existe) e `ManipuladorErrosRestTest` (usa o controller real com o caso de uso em dublê)
+- `docker-compose.yml`, `.env.example`, `README.md`, `specs/{03, 04, 05, 06, 08}`, skills `mcp-integration`, `rag-pgvector` e `testing`
+
+#### Comandos executados e resultados
+
+| Comando | Resultado |
+|---|---|
+| `./mvnw -B clean verify` (raiz), final | **BUILD SUCCESS**: `api-conhecimento` **524 testes** (eram 518), 0 falhas, 1 ignorado; `api-atendimentos` **240 testes** (eram 61), 0 falhas, 1 ignorado |
+| `./mvnw -B -pl api-atendimentos test -Dtest='BaseConhecimentoMcpAdapterIT'`, 1ª execução | **FALHOU** (19 de 22): interromper a chamada durante a conexão inicial travou o cliente MCP. Corrigido (ver "Decisões") |
+| `./mvnw -B -pl api-atendimentos test -Dtest='ServicosIntegradosIT,ChaveMcpErradaIT'`, 1ª execução | **FALHOU** (1 de 5): a pergunta com evidência voltou "sem evidência". Causa: os metadados entravam no texto do embedding (ver "Decisões"). Corrigido |
+| `docker compose up -d --build` (os dois serviços, chaves falsas, chave MCP gerada) | Os dois contêineres `healthy`; saúde pública `UP`; `400` para pergunta curta |
+| `docker stop coti-api-conhecimento` | Saúde `DEGRADADO` com HTTP `200`; liveness e readiness `UP`; pergunta devolveu `503` com `Retry-After: 30` e `X-Correlation-Id` |
+| `docker start coti-api-conhecimento` | A api-atendimentos voltou a `UP` sozinha, sem reinício (levou cerca de 18 s: cache de saúde de 10 s mais uma verificação que falhou por causa da sessão MCP antiga) |
+| `docker compose down` | Stack derrubada |
+
+#### Testes automatizados (resumo)
+
+| Área | Cobertura |
+|---|---|
+| Domínio | `PrazoTest` (7: restante, expiração, `limitar`, relógio manual), `PerguntaAlunoTest` (9) |
+| `MascaradorDadosPessoaisRegexTest` (23) | CPF com e sem pontuação, dígito verificador, e-mail, 8 formatos de telefone, protocolo de 10 dígitos preservado, preços e datas preservados, idempotência |
+| `ValidadorResultadoBuscaTest` (36) | resultado válido, vazio, 10 trechos, cada campo obrigatório ausente, UUID, categoria, similaridade fora de 0 a 1, `total` divergente, `id` repetido, mais de 10, texto de 2.000+, `isError` sem vazar o texto, mensagens sem conteúdo |
+| `ResponderPerguntaServiceTest` (13) | texto mascarado é o único que sai, sem trechos o gerador nunca é chamado, fontes copiadas dos citados, prazo único no fluxo, falhas sem resposta parcial, prazo vencendo no meio |
+| `BaseConhecimentoMcpAdapterIT` (23, servidor MCP de teste) | chamada e conversão, Bearer e `traceparent`, 9 formas de resultado inválido sem nova tentativa, 401/403, 500 e lentidão com 3 tentativas, timeout seguido de sucesso, prazo curto e expirado, sessão perdida |
+| `AtendimentoControllerTest` (20) | 400 sem chamar o caso de uso (curta, longa, campo extra, ausente, após `strip`), formato 200 do contrato, `atendimentoId` = `X-Correlation-Id`, sem evidência, similaridade nula, 503 de cada falha com `Retry-After`, 500 genérico |
+| Saúde | `HealthDegradadoIT` (9), `ConhecimentoMcpHealthIndicatorTest` (6: cache, ferramenta ausente, falha sem vazar mensagem), `SubidaSemConhecimentoIT` (4: sobe sem a base, `DEGRADADO`, 503, conexão recusada) |
+| Cabeçalhos | `McpCabecalhosCustomizerTest` (10) |
+| Entre serviços reais | `ServicosIntegradosIT` (3: sem evidência 200, o CPF nunca chega à OpenAI, pergunta com evidência chega ao gerador) e `ChaveMcpErradaIT` (2: 401 real da api-conhecimento, 503 ao aluno) |
+| Servidor de teste | `ServidorMcpDeTesteTest` (6) |
+
+**Teste ignorado (1 por serviço):** a variante "ausente" de `OPENAI_API_KEY` no `InicializacaoSemVariavelTest`, porque a variável existe no ambiente deste computador.
+
+#### Decisões e desvios
+
+- **`initialized: false` é obrigatório (ADR-21).** Com o padrão a api-atendimentos não sobe com a api-conhecimento desligada, o que viola o RNF07. Com `false` ela sobe, conecta na primeira chamada e se reabre sozinha.
+- **A thread do cliente MCP nunca é interrompida.** `Future.cancel(true)` durante a conexão inicial travou o cliente para sempre (19 dos 22 testes do adaptador falharam). O adaptador para de esperar e deixa o `request-timeout` do SDK terminar a chamada.
+- **Novas tentativas valem para qualquer falha de transporte** (desvio do contrato, que dizia só timeout e conexão): depois de a api-conhecimento reiniciar, o SDK falha a primeira chamada com uma `RuntimeException` sem tipo ("MCP session with server terminated") e se recupera na seguinte; sem repetir, o primeiro aluno após cada reinício veria 503. Credencial recusada, `isError` e resultado fora do contrato continuam sem repetição. Contrato esclarecido (§6.5).
+- **Achado na T053, corrigido na api-conhecimento (Fase 4):** o modelo de embedding da OpenAI manda os **metadados** junto com o texto do trecho (padrão `EMBED`), e mesmo com `metadata-mode: NONE` sobra um prefixo `"\n\n"`. O spike T031 tinha concluído o contrário porque o dublê lia direto `getText()`. Corrigi com `metadata-mode: NONE` e um `ContentFormatter` por `Document` que devolve só o texto (ADR-22), com teste unitário e prova ponta a ponta. Nada em produção precisa ser reindexado.
+- **Componente `conhecimentoMcp` reporta `DEGRADADO`, não `DOWN`** (desvio do exemplo do contrato §5.2). O Actuator agrega pelo pior status; com um componente `DOWN` o serviço inteiro ficaria `DOWN` (503). O resultado fica em cache por 10 s para o endpoint público não virar uma chamada ao MCP por requisição.
+- **Resposta sem evidência = mensagem + espaço + canal humano**, os dois de configuração (`ATENDIMENTO_MENSAGEM_SEM_EVIDENCIA` e `ATENDIMENTO_CANAL_HUMANO`, agora obrigatórias).
+- **Gerador provisório.** `GeradorRespostaNaoImplementado` sempre lança `ModeloIndisponivelException`; uma pergunta que encontra trechos termina em `503 MODELO_INDISPONIVEL` até a Fase 7. `ServicosIntegradosIT` documenta isso e passa a esperar 200 com a fonte quando o gerador existir. A assinatura de `GeradorRespostaPort` (pergunta mascarada, trechos, prazo) pode mudar na T054 para receber o `ContextoRag`.
+- **O filtro de limiar na `api-atendimentos` (contrato §6.3, passo 1) fica na T054** (`MontadorContextoRag`), junto com sanitização, cortes e rótulos `T<n>`.
+- **Pergunta mascarada acima de 1.000 caracteres é truncada** (um e-mail curto vira `[EMAIL]`, mais longo) para o servidor não recusá-la.
+- **Dependência de teste:** `testcontainers-postgresql` na `api-atendimentos`, só no escopo de teste (mesmo artefato já aprovado para a `api-conhecimento`; não traz o driver JDBC, e o `IsolamentoDeDependenciasTest` continua passando). O Surefire do módulo passou a executar `*IT`.
+- **Tempo e variáveis:** `CONHECIMENTO_MCP_TIMEOUT` alimenta ao mesmo tempo o `request-timeout` do SDK e o limite do adaptador.
+
+#### Pendências e riscos
+
+- **Variáveis novas no `.env`.** O Compose agora exige, para a `api-atendimentos`, `ATENDIMENTO_MENSAGEM_SEM_EVIDENCIA` e `ATENDIMENTO_CANAL_HUMANO` (além de `CONHECIMENTO_MCP_API_KEY`, da Fase 5). Eu não li nem alterei o seu `.env`; sem elas `docker compose up` falha pedindo cada uma pelo nome.
+- **Uma pergunta genérica chegou à OpenAI na validação no Docker.** Ao testar a degradação, enviei "Quais sao as modalidades?" à stack; a api-conhecimento tentou gerar o embedding com a chave **falsa** e a OpenAI recusou (401). Nenhuma chave real, dado pessoal nem documento saiu; registro por transparência.
+- **Limite de requisições** (10 por minuto por IP no `perguntar`) e o `429` continuam para a Fase 8 (T062). Hoje a rota pública não tem limite.
+- **Recuperação após reinício da api-conhecimento** leva até cerca de 18 s no health (cache de 10 s mais uma verificação com a sessão antiga); as perguntas se recuperam sozinhas pela nova tentativa.
+- **Primeira chamada** abre a sessão MCP (cerca de 300 ms); cabe no limite de 5 s.
+- **Sem prova com a OpenAI real**, tanto de embedding quanto de chat (T067 e Fase 7).
+- **`UserDetailsServiceAutoConfiguration`** imprime a senha gerada no log da subida na `api-conhecimento` (pendência da Fase 4); não verifiquei se a `api-atendimentos` também. Fica para a Fase 8.
+- Itens antigos: allowlists de e-mail e telefone institucionais vazias, scanner de segredos (T066), documentos reais (T067), licença do starter MCP.
+
+#### Próxima fase
+
+**Fase 7 — Integração com OpenAI e montagem do contexto RAG** (T054–T061). A primeira tarefa é a **T054**: `ContextoRag`, `ReferenciaTrecho` e `MontadorContextoRag` (filtro de limiar, ordenação, sanitização, cortes de 2.000 e 8.000 caracteres, máximo de 5 trechos e rótulos `T1`, `T2`...).
 
 ---
 

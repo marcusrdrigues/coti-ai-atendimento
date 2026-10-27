@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.ai.document.ContentFormatter;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
@@ -25,6 +26,13 @@ import org.springframework.stereotype.Component;
 @Component
 public final class PgVectorRepositorioAdapter implements RepositorioVetorialPort {
 
+    /**
+     * O que o modelo de embedding recebe de cada trecho: somente o texto. O padrão do Spring AI no modelo da OpenAI
+     * acrescenta os metadados (ids, status, datas) e um prefixo de quebras de linha, o que polui o vetor; o teste
+     * entre os dois serviços (T053) mostrou isso. Vale para qualquer modo de metadados configurado.
+     */
+    static final ContentFormatter SOMENTE_O_TEXTO = (documento, modo) -> documento.getText();
+
     static final String CHAVE_DOCUMENTO_ID = "documentoId";
     static final String CHAVE_STATUS = "status";
 
@@ -39,17 +47,23 @@ public final class PgVectorRepositorioAdapter implements RepositorioVetorialPort
     @Override
     public void gravarLote(Documento documento, List<Trecho> lote) {
         List<Document> documentos = lote.stream()
-                .map(trecho -> Document.builder()
-                        .id(trecho.id().toString())
-                        .text(trecho.texto())
-                        .metadata(metadados(documento, trecho))
-                        .build())
+                .map(trecho -> paraDocumento(documento, trecho))
                 .toList();
         try {
             vectorStore.add(documentos);
         } catch (RuntimeException falha) {
             throw TradutorFalhasEmbedding.traduzir(falha);
         }
+    }
+
+    private static Document paraDocumento(br.com.coti.conhecimento.dominio.Documento documento, Trecho trecho) {
+        Document resultado = Document.builder()
+                .id(trecho.id().toString())
+                .text(trecho.texto())
+                .metadata(metadados(documento, trecho))
+                .build();
+        resultado.setContentFormatter(SOMENTE_O_TEXTO);
+        return resultado;
     }
 
     @Override

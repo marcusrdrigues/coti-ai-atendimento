@@ -127,7 +127,7 @@ Portanto:
 
 ### 1. Dependência e configuração
 
-- Starter de cliente MCP do Spring AI 2.0 com transporte Streamable HTTP (por exemplo, `spring-ai-starter-mcp-client`; **conferir** o nome do artefato na versão fixada).
+- Starter de cliente MCP do Spring AI 2.0 com transporte Streamable HTTP (`spring-ai-starter-mcp-client`, conferido na 2.0.1). **Use `initialized: false`**: com o padrão a aplicação não sobe com o servidor MCP fora do ar; com `false` ela sobe, conecta na primeira chamada e se reabre sozinha quando o servidor volta (spike T044).
 
 ```yaml
 spring:
@@ -150,13 +150,13 @@ spring:
 
 ### 2. Credencial e trace no cabeçalho
 
-- Envie a credencial de serviço e o contexto de trace (`traceparent`) em toda requisição. O Spring AI aplica beans `McpClientCustomizer<HttpClientStreamableHttpTransport.Builder>` a cada transporte; use um customizador para acrescentar cabeçalhos. **Conferir** o método do builder que customiza a requisição HTTP na versão do MCP Java SDK usada.
+- Envie a credencial de serviço e o contexto de trace (`traceparent`) em toda requisição. Conferido na 2.0.1: um bean `McpSyncHttpClientRequestCustomizer` é aplicado pela autoconfiguração a toda requisição HTTP e acrescenta `Authorization` e `traceparent`. Ele roda em threads do cliente HTTP, sem o MDC; por isso um bean `McpClientCustomizer<McpClient.SyncSpec>` define `transportContextProvider(...)`, que lê o trace id do MDC na thread que chama `callTool`. Se a chamada for feita em outra thread (para limitar o tempo), copie o MDC para ela.
 
 ### 3. Adaptador de busca
 
 - Crie `BaseConhecimentoMcpAdapter` implementando a porta `BaseConhecimentoPort` da camada de aplicação.
-- O adaptador recebe o `McpSyncClient` da conexão `conhecimento` (o starter publica a lista de clientes como bean; **conferir** o tipo exato injetável) e:
-  1. chama a ferramenta `buscar_conhecimento` com `{ "pergunta": <pergunta mascarada>, "limite": 5 }` (`callTool` com `CallToolRequest`; **conferir** construtor ou builder);
+- O adaptador recebe o `McpSyncClient` da conexão `conhecimento` (o starter publica um bean `List<McpSyncClient>`, sem bean individual; conferido) e:
+  1. chama a ferramenta `buscar_conhecimento` com `{ "pergunta": <pergunta mascarada>, "limite": 5 }` (`callTool(new CallToolRequest(nome, Map))`, conferido);
   2. se `isError` for verdadeiro, lança exceção de domínio;
   3. lê o `structuredContent`, converte para `record` e valida contra o `outputSchema` do contrato (campos obrigatórios, categoria conhecida, `similaridade` entre 0 e 1 ou `null`, `texto` ≤ 2.000, no máximo 10 trechos, sem `id` repetido). Qualquer violação rejeita o resultado inteiro;
   4. devolve objetos de domínio (`TrechoConhecimento`), nunca tipos do MCP.
@@ -168,6 +168,9 @@ spring:
 - Não descubra ferramentas dinamicamente para expô-las ao modelo.
 
 ### 5. Timeouts e retry
+
+- **Nunca interrompa a thread do cliente MCP** (`Future.cancel(true)`, `Thread.interrupt`): interromper a conexão inicial preguiçosa deixa o cliente travado para as chamadas seguintes. Pare de esperar e deixe o `request-timeout` do SDK terminar a chamada.
+- Depois que o servidor reinicia, a primeira chamada falha com `RuntimeException("MCP session with server terminated")` (sem tipo próprio) e a seguinte reabre a sessão: repita qualquer falha de transporte (a ferramenta é de leitura e idempotente), exceto credencial recusada (`McpHttpClientTransportAuthorizationException`).
 
 - `request-timeout` curto (padrão do projeto: 5s, ajustável).
 - Retry só para timeout e erro de conexão, com backoff exponencial, variação aleatória e no máximo 2 novas tentativas. A ferramenta é somente leitura e idempotente, então repetir é seguro.

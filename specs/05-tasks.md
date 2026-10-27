@@ -114,25 +114,25 @@ Legenda: `CON` = `api-conhecimento`, `ATE` = `api-atendimentos`, `INF` = infraes
 
 ## Fase 6 — MCP Client e API de Atendimentos
 
-- [ ] **T044** `ATE` **(spike)** — Confirmar no Spring AI 2.0.1 / MCP Java SDK: artefato do MCP Client, injeção do `McpSyncClient` da conexão, construção do `CallToolRequest`, customização de cabeçalhos via `McpClientCustomizer`, efeito de `initialized: true` sem servidor, propriedades de status customizado do Actuator.
+- [x] **T044** `ATE` **(spike)** — Confirmar no Spring AI 2.0.1 / MCP Java SDK: artefato do MCP Client, injeção do `McpSyncClient` da conexão, construção do `CallToolRequest`, customização de cabeçalhos via `McpClientCustomizer`, efeito de `initialized: true` sem servidor, propriedades de status customizado do Actuator.
   Dep.: T006, T010. Verificação: resultado registrado em `04-plan.md`.
-- [ ] **T045** `ATE` — Domínio: `PerguntaAluno`, `TrechoConhecimento`, `Fonte`, `ResultadoAtendimento`, `Prazo` e exceções `BaseConhecimentoIndisponivelException`, `TempoEsgotadoException`.
+- [x] **T045** `ATE` — Domínio: `PerguntaAluno`, `TrechoConhecimento`, `Fonte`, `ResultadoAtendimento`, `Prazo` e exceções `BaseConhecimentoIndisponivelException`, `TempoEsgotadoException`.
   Dep.: T017. Verificação: `PrazoTest` (tempo restante, expiração com `Clock` injetado).
-- [ ] **T046** `ATE` — `MascaradorPort` e `MascaradorDadosPessoaisRegex` (CPF, e-mail, telefone).
+- [x] **T046** `ATE` — `MascaradorPort` e `MascaradorDadosPessoaisRegex` (CPF, e-mail, telefone).
   Dep.: T045. Verificação: `MascaradorDadosPessoaisRegexTest`.
-- [ ] **T047** `ATE` — DTOs `PerguntarRequest`, `RespostaAtendimentoResponse`, `FonteResponse` e `AtendimentoController` com Bean Validation; caso de uso substituído por dublê.
+- [x] **T047** `ATE` — DTOs `PerguntarRequest`, `RespostaAtendimentoResponse`, `FonteResponse` e `AtendimentoController` com Bean Validation; caso de uso substituído por dublê.
   Dep.: T013, T045. Verificação: `AtendimentoControllerTest` (400 para 2 e 1.001 caracteres e campo extra, sem chamar o caso de uso; 200 no formato do contrato).
-- [ ] **T048** `ATE` — `ServidorMcpDeTeste`: servidor MCP mínimo em teste que publica `buscar_conhecimento` com o contrato §4 e respostas configuráveis (sucesso, vazio, `isError`, fora do schema, lento, 401).
+- [x] **T048** `ATE` — `ServidorMcpDeTeste`: servidor MCP mínimo em teste que publica `buscar_conhecimento` com o contrato §4 e respostas configuráveis (sucesso, vazio, `isError`, fora do schema, lento, 401).
   Dep.: T044. Verificação: um teste usa o servidor e lista a ferramenta.
-- [ ] **T049** `ATE` — Configuração do MCP Client (`SYNC`, `request-timeout` 5 s, `toolcallback.enabled=false`, conexão `conhecimento`) e `McpCabecalhosCustomizer` (Bearer + `traceparent`).
+- [x] **T049** `ATE` — Configuração do MCP Client (`SYNC`, `request-timeout` 5 s, `toolcallback.enabled=false`, conexão `conhecimento`) e `McpCabecalhosCustomizer` (Bearer + `traceparent`).
   Dep.: T044. Verificação: teste com `ServidorMcpDeTeste` confere os dois cabeçalhos recebidos.
-- [ ] **T050** `ATE` — `ValidadorResultadoBusca` e `BaseConhecimentoMcpAdapter`: `tools/call`, `isError`, validação do `outputSchema`, conversão para domínio, até 2 novas tentativas só em timeout/conexão, respeitando o `Prazo`.
+- [x] **T050** `ATE` — `ValidadorResultadoBusca` e `BaseConhecimentoMcpAdapter`: `tools/call`, `isError`, validação do `outputSchema`, conversão para domínio, até 2 novas tentativas só em timeout/conexão, respeitando o `Prazo`.
   Dep.: T046, T048, T049. Verificação: `ValidadorResultadoBuscaTest` e `BaseConhecimentoMcpAdapterIT` (sucesso, `isError`, fora do schema, `id` repetido, lento, 401).
-- [ ] **T051** `ATE` — `GeradorRespostaPort` (só a interface) e `ResponderPerguntaService` sem modelo: mascarar → buscar → vazio = sem evidência com mensagem configurada; falhas MCP → 503 `BASE_CONHECIMENTO_INDISPONIVEL`; prazo → 503 `TEMPO_ESGOTADO`.
+- [x] **T051** `ATE` — `GeradorRespostaPort` (só a interface) e `ResponderPerguntaService` sem modelo: mascarar → buscar → vazio = sem evidência com mensagem configurada; falhas MCP → 503 `BASE_CONHECIMENTO_INDISPONIVEL`; prazo → 503 `TEMPO_ESGOTADO`.
   Dep.: T047, T050. Verificação: `ResponderPerguntaServiceTest` (gerador nunca chamado com lista vazia; texto mascarado é o enviado).
-- [ ] **T052** `ATE` — `ConhecimentoMcpHealthIndicator` (ping ou `tools/list`, 2 s) e status agregado `DEGRADADO` (HTTP 200); `liveness`/`readiness` sem o indicador.
+- [x] **T052** `ATE` — `ConhecimentoMcpHealthIndicator` (ping ou `tools/list`, 2 s) e status agregado `DEGRADADO` (HTTP 200); `liveness`/`readiness` sem o indicador.
   Dep.: T015, T044, T049. Verificação: `HealthDegradadoIT` e `SubidaSemConhecimentoIT` (serviço sobe e responde 503 do contrato com a CON fora).
-- [ ] **T053** `ATE` `CON` — Teste de integração entre serviços reais: ATE contra a CON real (Testcontainers) para a pergunta sem evidência e para 401 com chave MCP errada.
+- [x] **T053** `ATE` `CON` — Teste de integração entre serviços reais: ATE contra a CON real (Testcontainers) para a pergunta sem evidência e para 401 com chave MCP errada.
   Dep.: T043, T051. Verificação: teste passa nos dois sentidos.
 
 ## Fase 7 — Integração com OpenAI e montagem do contexto RAG

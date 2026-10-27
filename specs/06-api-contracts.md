@@ -579,7 +579,7 @@ Exemplo sem evidência (RF10, `200`):
 }
 ```
 
-O texto de recusa e o canal humano vêm de configuração (`ATENDIMENTO_MENSAGEM_SEM_EVIDENCIA` e `ATENDIMENTO_CANAL_HUMANO`); o exemplo é ilustrativo.
+O texto de recusa e o canal humano vêm de configuração (`ATENDIMENTO_MENSAGEM_SEM_EVIDENCIA` e `ATENDIMENTO_CANAL_HUMANO`); o exemplo é ilustrativo. A `resposta` é a mensagem seguida de um espaço e do canal humano.
 
 **Erros:** `400 DADOS_INVALIDOS`, `413`, `415`, `429 LIMITE_REQUISICOES`, `500 ERRO_INTERNO`, `503 BASE_CONHECIMENTO_INDISPONIVEL`, `503 MODELO_INDISPONIVEL`, `503 TEMPO_ESGOTADO`. Todos no formato da seção 2, com `correlacaoId` igual ao `atendimentoId` do atendimento que falhou.
 
@@ -607,7 +607,7 @@ Resposta autenticada (`200 OK`), com a `api-conhecimento` indisponível:
 {
   "status": "DEGRADADO",
   "components": {
-    "conhecimentoMcp": { "status": "DOWN", "details": { "codigo": "BASE_CONHECIMENTO_INDISPONIVEL" } },
+    "conhecimentoMcp": { "status": "DEGRADADO", "details": { "codigo": "BASE_CONHECIMENTO_INDISPONIVEL" } },
     "ping": { "status": "UP" }
   }
 }
@@ -621,6 +621,7 @@ Resposta autenticada (`200 OK`), com a `api-conhecimento` indisponível:
 
 - O indicador `conhecimentoMcp` faz `ping` ou `tools/list` no servidor MCP com timeout de 2 s e confere que `buscar_conhecimento` existe. **Não** chama a OpenAI.
 - `DEGRADADO` é um status customizado do Spring Boot Actuator com ordem e mapeamento HTTP configurados (decisão em `03-architecture.md`).
+- O componente `conhecimentoMcp` reporta `DEGRADADO` (e não `DOWN`) quando a base está fora: o Actuator agrega pelo pior status e um componente `DOWN` tornaria o agregado `DOWN` (503). Por isso o exemplo acima mostra `DEGRADADO` no componente. O resultado da verificação fica em cache por alguns segundos, para o endpoint público não virar uma chamada ao MCP por requisição.
 - Os detalhes nunca expõem URL, host, porta ou credencial.
 
 A `api-conhecimento` também expõe `/actuator/health` (com o indicador do banco), com as mesmas regras de exposição.
@@ -720,7 +721,7 @@ Se o modelo devolver `conhecimentoSuficiente = false`, a resposta final é a men
 | `trechos` vazio ou todos abaixo do limiar | — | `200`, sem evidência | — |
 | Modelo indica conhecimento insuficiente | — | `200`, sem evidência | — |
 | Saída do modelo reprovada após 2 novas tentativas | 2 | `200`, sem evidência | — |
-| MCP: timeout (`[5 s]`) ou conexão recusada | até 2 novas, backoff exponencial com variação | `503` | `BASE_CONHECIMENTO_INDISPONIVEL` |
+| MCP: timeout (`[5 s]`), conexão recusada ou outra falha de transporte (HTTP 5xx, sessão perdida porque a api-conhecimento reiniciou) | até 2 novas, backoff exponencial com variação | `503` | `BASE_CONHECIMENTO_INDISPONIVEL` |
 | MCP: HTTP 401/403 | nenhuma (alerta de configuração no log) | `503` | `BASE_CONHECIMENTO_INDISPONIVEL` |
 | MCP: `isError = true` ou resultado fora do schema | nenhuma | `503` | `BASE_CONHECIMENTO_INDISPONIVEL` |
 | OpenAI: timeout (`[20 s]`), 429 ou 5xx | 1 nova | `503` | `MODELO_INDISPONIVEL` |
@@ -758,3 +759,4 @@ Regras:
 |---|---|---|
 | 1.0.0 | 2026-10-22 | Versão inicial |
 | 1.0.0 (revisão) | 2026-10-27 | Esclarecimentos da Fase 5, sem mudar campos, códigos nem a versão do servidor MCP (`1.0.0`): diferenças do schema publicado pelo `@McpTool` (§4.2), forma do texto de erro e erro de schema do SDK (§4.5). O limite de 10 requisições por minuto do diagnóstico (§3.5) continua para a Fase 8 |
+| 1.0.0 (revisão) | 2026-10-27 | Esclarecimentos da Fase 6, sem mudar campos nem códigos: o componente `conhecimentoMcp` do health reporta `DEGRADADO` (§5.2); falhas de transporte do MCP também têm novas tentativas (§6.5); a resposta sem evidência é a mensagem seguida do canal humano (§5.1) |
