@@ -22,7 +22,8 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
         "CONHECIMENTO_MCP_API_KEY=" + ChavesTeste.MCP,
         "CONHECIMENTO_MCP_URL=http://127.0.0.1:1",
         "ATENDIMENTO_MENSAGEM_SEM_EVIDENCIA=" + ChavesTeste.SEM_EVIDENCIA,
-        "ATENDIMENTO_CANAL_HUMANO=" + ChavesTeste.CANAL_HUMANO
+        "ATENDIMENTO_CANAL_HUMANO=" + ChavesTeste.CANAL_HUMANO,
+        "coti.atendimentos.limites-requisicao.perguntas-por-minuto-por-ip=100000"
 })
 @AutoConfigureMockMvc
 public @interface TesteWeb {

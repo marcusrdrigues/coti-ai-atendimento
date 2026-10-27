@@ -32,6 +32,7 @@ public record PropriedadesConhecimento(
         @Valid @DefaultValue Divisao divisao,
         @Valid @DefaultValue Embeddings embeddings,
         @Valid @DefaultValue Busca busca,
+        @Valid @DefaultValue LimitesRequisicao limitesRequisicao,
         @DefaultValue("false") boolean documentacaoPublica) {
 
     /**
@@ -116,6 +117,13 @@ public record PropriedadesConhecimento(
             return new LimitesBusca(perguntaMinima, perguntaMaxima, limitePadrao, limiteMaximo, limiarSimilaridade,
                     textoMaximoPorTrecho, textoMaximoTotal, tempoLimite);
         }
+    }
+
+    /** Limites por credencial administrativa (contrato, seções 3.2 e 3.5), em memória e por instância (ADR-12). */
+    public record LimitesRequisicao(
+            @Positive @DefaultValue("30") int cadastroPorMinuto,
+            @Positive @DefaultValue("10") int diagnosticoPorMinuto,
+            @Positive @DefaultValue("100") int maximoDeCredenciais) {
     }
 
     /**

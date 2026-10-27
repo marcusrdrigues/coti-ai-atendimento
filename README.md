@@ -7,7 +7,7 @@ Plataforma de atendimento inteligente para alunos da COTI Informática, formada 
 
 A especificação completa está em [`specs/`](specs/) (constituição, requisitos, arquitetura, plano, tarefas e contratos). Agentes de codificação seguem o [`AGENTS.md`](AGENTS.md).
 
-> Estado atual: Fases 1 a 6 concluídas. A `api-conhecimento` cadastra, divide e indexa documentos, busca por similaridade e expõe a ferramenta MCP `buscar_conhecimento`. A `api-atendimentos` recebe a pergunta, mascara dados pessoais, chama a ferramenta MCP, responde "sem evidência" quando a base não tem o assunto e devolve `503` com `Retry-After` quando uma dependência falha; ela sobe mesmo com a `api-conhecimento` fora do ar (saúde `DEGRADADO`). Uma pergunta que encontra trechos ainda termina em `503 MODELO_INDISPONIVEL`, porque a geração da resposta com o modelo de IA chega na Fase 7. Cadastro e busca chamam a OpenAI de verdade (`text-embedding-3-small`); acompanhe em [`specs/05-tasks.md`](specs/05-tasks.md).
+> Estado atual: Fases 1 a 7 concluídas. A `api-atendimentos` recebe a pergunta, mascara dados pessoais, busca os trechos pela ferramenta MCP, monta o contexto (limiar 0,70, no máximo 5 trechos), gera a resposta com o modelo de chat (sem ferramentas, saída estruturada), valida a saída em código (referência inventada, preço, data, horário ou vagas sem evidência são reprovados) e devolve a resposta com as fontes copiadas do MCP. Sem evidência, ou com saída reprovada três vezes, responde a mensagem configurada; se uma dependência falha, devolve `503` com `Retry-After`. Ela sobe mesmo com a `api-conhecimento` fora do ar (saúde `DEGRADADO`). Todos os testes usam OpenAI simulada; **a geração de resposta ainda não foi provada com o modelo real** (depende de você autorizar um teste com a sua chave e do eval da Fase 8). Acompanhe em [`specs/05-tasks.md`](specs/05-tasks.md).
 
 ## Ambiente local
 
@@ -146,3 +146,15 @@ curl -i http://localhost:8081/api/conhecimentos
 ```
 
 A segunda chamada deve devolver `401` no formato Problem Details, com o cabeçalho `X-Correlation-Id`.
+
+## Remover um conhecimento da base
+
+A remoção por API está fora do MVP. Para apagar um documento e todos os seus trechos (e rodar o `VACUUM` que o índice vetorial precisa depois de remoções), use o script, que lê as credenciais do dono do esquema no `.env` e pede confirmação:
+
+```bash
+scripts/remover-conhecimento.sh <id-do-documento>
+```
+
+## Limites de requisição
+
+`POST /api/atendimentos/perguntar`: 10 por minuto por IP. `POST /api/conhecimentos`: 30 por minuto por credencial. `POST /api/conhecimentos/diagnostico/busca`: 10 por minuto por credencial. Acima disso a resposta é `429` com `Retry-After`. Os limites são em memória e por instância.

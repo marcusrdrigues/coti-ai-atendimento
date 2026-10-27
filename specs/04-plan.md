@@ -107,7 +107,23 @@ Comprovadas em `ScoreCossenoIT`, com trechos de cosseno exato em relação à pe
 | Status customizado do Actuator | `management.endpoint.health.status.order=DOWN,OUT_OF_SERVICE,DEGRADADO,UP,UNKNOWN` e `management.endpoint.health.status.http-mapping.DEGRADADO=200` funcionam. O agregador escolhe o pior status pela ordem: um componente `DOWN` derrubaria o serviço, então o `conhecimentoMcp` reporta `DEGRADADO` (e não `DOWN`) quando a base está fora |
 | Pacotes de saúde no Boot 4 | `org.springframework.boot.health.contributor.{Health, HealthIndicator, Status}` |
 
-Ainda a conferir em tarefas posteriores (spike T061): detalhes de API do Spring AI listados em `03-architecture.md` §15.
+#### Achados da Fase 7 (chat com o Spring AI 2.0.1, T056 e T061)
+
+Conferidos nos jars `2.0.1` e por teste contra uma OpenAI simulada (HTTP de verdade, pelo SDK oficial):
+
+| Tema | Achado |
+|---|---|
+| Saída estruturada | `ChatClient.prompt().advisors(AdvisorParams.ENABLE_NATIVE_STRUCTURED_OUTPUT)...call().entity(RespostaModelo.class)`. A requisição sai com `response_format` do tipo `json_schema`, `strict: true`, com os três campos. `@JsonProperty(required = true)` no `record` faz campo ausente falhar a conversão (vira `SaidaModeloInvalidaException`, não um valor padrão inventado) |
+| Parâmetros da requisição | Modelo de `OPENAI_CHAT_MODEL`, `temperature` 0, teto de 600 tokens e nenhuma `tools`/`functions` (testado na requisição recebida). O `ChatClient` não recebe `ToolCallbackProvider` |
+| Novas tentativas | `spring.ai.openai.max-retries: 0` e nenhum retry oculto do Spring AI: o teste conta as requisições que chegam à OpenAI simulada (429/500 → 2; 400/401/403 → 1). A repetição fica só em `OpenAiGeradorRespostaAdapter` (ADR-13) |
+| Falhas | Falha do SDK (`OpenAIIoException`, `OpenAIRetryableException`, 408/429/5xx) é transitória; 400/401/403 e demais 4xx são definitivas. Qualquer outra falha vinda da chamada é a conversão da saída para o schema, tratada como saída inválida |
+| Interrupção | Diferente do cliente MCP, interromper a chamada de chat por timeout (`Future.cancel(true)`) não deixou o cliente em mau estado: os testes seguintes continuam funcionando |
+| Prompt em log (T061) | `spring.ai.chat.observations.{log-prompt,log-completion,include-error-logging}` e `spring.ai.chat.client.observations.{log-prompt,log-completion}` existem no 2.0.1 com padrão `false`; ficam explícitos no `application.yml`. `LogsSemDadosSensiveisIT` captura todo o Logback do fluxo completo (sucesso, saída reprovada, 500, 401, sem evidência) com `DEBUG` em `org.springframework.ai`, `com.openai` e `br.com.coti` e não acha pergunta, CPF, e-mail, texto de trecho, texto de resposta nem chave |
+| **O SDK do MCP loga o JSON-RPC em DEBUG** | Com `io.modelcontextprotocol` em `DEBUG`, `HttpClientStreamableHttpTransport`, `McpSchema` e `McpClientSession` escrevem a pergunta mascarada e o texto dos trechos. No nível padrão não vaza. O `application.yml` fixa `logging.level.io.modelcontextprotocol: INFO` e o teste confere o nível efetivo. Quem subir esse logger para `DEBUG` de propósito (variável de ambiente) reabre o vazamento |
+| Cold start nos testes | A primeira chamada da JVM (conexão MCP + SDK da OpenAI) passa de 1,5 s; `TesteComOpenAiFalsa` faz um aquecimento único antes dos testes para nenhum depender de partida a frio |
+| WireMock | Não foi usado: a `OpenAiFalsa` (servidor do JDK, sem dependência nova, já existia para embeddings) ganhou o endpoint de chat roteirizado. Evita nova dependência (que exigiria aprovação) e o conflito Jackson 2 × 3 que o plano previa |
+
+Ainda a conferir em tarefas posteriores: detalhes de API do Spring AI listados em `03-architecture.md` §15 que não foram usados na Fase 7.
 
 ### Confirmações do MCP Server (T040–T042, Spring AI 2.0.1 e MCP Java SDK 2.0.0, 2026-10-27)
 

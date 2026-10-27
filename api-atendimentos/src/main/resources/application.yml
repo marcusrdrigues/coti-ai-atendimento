@@ -10,6 +10,11 @@ server:
 spring:
   application:
     name: api-atendimentos
+  autoconfigure:
+    exclude:
+      # A autenticação é por chave de API em filtros próprios. Sem esta exclusão o Spring cria um usuário em memória
+      # e imprime a senha gerada no log da subida (credencial em log).
+      - org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
   threads:
     virtual:
       enabled: true
@@ -33,6 +38,17 @@ spring:
             conhecimento:
               url: ${CONHECIMENTO_MCP_URL}
               endpoint: /mcp
+    chat:
+      # Prompt e resposta carregam a pergunta do aluno e o texto dos trechos: nunca vão para log (AGENTS.md 4.4).
+      # Os padrões já são false; ficam explícitos para que ligar um deles seja uma decisão visível em revisão.
+      observations:
+        log-prompt: false
+        log-completion: false
+        include-error-logging: false
+      client:
+        observations:
+          log-prompt: false
+          log-completion: false
     model:
       embedding: none # Artigo 6: embeddings só existem na api-conhecimento
     openai:
@@ -62,9 +78,20 @@ coti:
     busca:
       limite: 5
       limiar-similaridade: 0.70 # igual ao do servidor; defesa em profundidade
+    contexto: # contrato 6.3: o que o modelo recebe
+      maximo-caracteres-trecho: 2000
+      maximo-caracteres-total: 8000
+      maximo-trechos: 5
+    validacao:
+      novas-tentativas-saida: 2 # saída reprovada volta ao modelo com o motivo
+    prompt:
+      versao: v1 # prompts/responder-pergunta.system.v1.st e user.v1.st
+    limites-requisicao: # RF06: abuso e custo na rota pública; por IP da conexão e por instância
+      perguntas-por-minuto-por-ip: 10
+      maximo-de-ips: 10000
     resiliencia:
       mcp-tempo-limite: ${CONHECIMENTO_MCP_TIMEOUT:5s}
-      mcp-novas-tentativas: 2 # só para timeout e conexão; a ferramenta é de leitura e idempotente
+      mcp-novas-tentativas: 2 # falhas de transporte; a ferramenta é de leitura e idempotente
       prazo-total: 30s
       retry-after: 30s
       atraso-inicial: 200ms
@@ -73,6 +100,8 @@ coti:
       jitter: 100ms
       saude-tempo-limite: 2s
       saude-validade: 10s # o health público não pode virar uma chamada ao MCP por requisição
+      chat-tempo-limite: ${OPENAI_TIMEOUT:20s} # mesmo valor do timeout do cliente HTTP da OpenAI
+      chat-novas-tentativas: 1 # timeout, 429 e 5xx; 400, 401 e 403 não repetem
     documentacao-publica: false
 
 management:
@@ -100,6 +129,10 @@ springdoc:
     enabled: false
 
 logging:
+  level:
+    # Em DEBUG o SDK do MCP escreve as mensagens JSON-RPC inteiras: a pergunta do aluno e o texto dos trechos
+    # (T061, LogsSemDadosSensiveisIT). Fixo em INFO para que subir o nível raiz para DEBUG não vaze esse conteúdo.
+    io.modelcontextprotocol: INFO
   structured:
     format:
       console: ecs

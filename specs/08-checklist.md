@@ -21,7 +21,7 @@ Convenção: só se registra como "passou" um teste que foi executado, com o com
 | 4 — Chunking e geração de embeddings | **Concluída** | T028–T036 (9/9) | 2026-10-26 |
 | 5 — Busca vetorial e MCP Server | **Concluída** | T037–T043 (7/7) | 2026-10-27 |
 | 6 — MCP Client e API de Atendimentos | **Concluída** | T044–T053 (10/10) | 2026-10-27 |
-| 7 — Integração com OpenAI e contexto RAG | Pendente | T054–T061 | — |
+| 7 — Integração com OpenAI e contexto RAG | Concluída | T054–T061 | 2026-10-27 |
 | 8 — Testes, segurança e observabilidade | Pendente | T062–T075 | — |
 
 Tarefas independentes das fases (T066 verificador de segredos e T067 documentos da COTI) continuam abertas.
@@ -592,9 +592,89 @@ Nenhum teste Java foi executado nesta fase: ainda não existe código Java (Fase
 - **`UserDetailsServiceAutoConfiguration`** imprime a senha gerada no log da subida na `api-conhecimento` (pendência da Fase 4); não verifiquei se a `api-atendimentos` também. Fica para a Fase 8.
 - Itens antigos: allowlists de e-mail e telefone institucionais vazias, scanner de segredos (T066), documentos reais (T067), licença do starter MCP.
 
+#### Pendências resolvidas antes da Fase 7 (2026-10-27)
+
+| Pendência | Como foi resolvida |
+|---|---|
+| Limite de requisições (T062) | `BaldeTokens` (balde de fichas em memória, ADR-12) e `LimiteRequisicoesFilter` nos dois serviços. `api-atendimentos`: 10 perguntas por minuto por IP da conexão (não confia em `X-Forwarded-For`). `api-conhecimento`: cadastro 30 e diagnóstico 10 por minuto por credencial, baldes separados, logo depois da autenticação (sem credencial válida não gasta ficha). 429 `LIMITE_REQUISICOES` com `Retry-After` no formato do contrato. Por instância; valer no conjunto exige armazenamento compartilhado (pré-produção). Testes: `BaldeTokensTest` nos dois serviços, `LimiteRequisicoesIT` nos dois |
+| Senha gerada no log da subida | `UserDetailsServiceAutoConfiguration` excluída nos dois serviços (a autenticação é por chave em filtros próprios); teste de que não existe `UserDetailsService`. Antes, a `api-conhecimento` imprimia a senha gerada pelo Spring no log |
+| Saúde demorando a voltar a `UP` | O resultado ruim do `conhecimentoMcp` fica em cache por 2 s (o bom, 10 s). Antes, após o reinício da `api-conhecimento` a volta levava cerca de 18 s |
+| Licença do starter MCP e do SDK | Conferida nos POMs publicados: `spring-ai-starter-mcp-*` e `spring-ai-mcp*` em Apache 2.0; SDK `io.modelcontextprotocol.sdk:mcp`, `mcp-core` e `mcp-json-jackson3` 2.0.0 em MIT |
+| Remoção de documento e `VACUUM` | `scripts/remover-conhecimento.sh <id> [--sim]`: remove o registro e os trechos numa transação com o papel dono e roda `VACUUM (ANALYZE) vector_store`. Testado contra o PostgreSQL do Compose com um id inexistente (0 removidos, `VACUUM` concluído); id fora do formato UUID é recusado antes de qualquer SQL |
+
+Continuam abertas por dependerem de você: aprovar a ferramenta do verificador de segredos (T066), documentos reais (T067), e-mails e telefones institucionais, e um teste com a OpenAI real. Suíte completa após estas correções: `api-conhecimento` 539 testes e `api-atendimentos` 256, 0 falhas, 1 ignorado em cada.
+
 #### Próxima fase
 
 **Fase 7 — Integração com OpenAI e montagem do contexto RAG** (T054–T061). A primeira tarefa é a **T054**: `ContextoRag`, `ReferenciaTrecho` e `MontadorContextoRag` (filtro de limiar, ordenação, sanitização, cortes de 2.000 e 8.000 caracteres, máximo de 5 trechos e rótulos `T1`, `T2`...).
+
+---
+
+### Fase 7 — Integração com OpenAI e montagem do contexto RAG
+
+**Status:** concluída. **Data:** 2026-10-27. **Tarefas:** T054 a T061 (8 de 8).
+
+#### O que foi entregue
+
+| Tarefa | Resultado |
+|---|---|
+| T054 | `ContextoRag`, `ReferenciaTrecho`, `MontadorContextoRag`: limiar 0,70, ordem por similaridade (nula no fim), sanitização (controle, delimitadores forjados `‹ ›`, aspas), cortes de 2.000 por trecho e 8.000 no total (sai o trecho inteiro de menor similaridade), máximo de 5, rótulos `T1..Tn` |
+| T055 | `prompts/responder-pergunta.system.v1.st` e `.user.v1.st` (parâmetros `trechos`, `pergunta`, `aviso`), versão por configuração (`coti.atendimentos.prompt.versao`) |
+| T056 | `RespostaModelo`, `ChatClientConfig` e `OpenAiGeradorRespostaAdapter`: saída estruturada nativa, temperatura 0, 600 tokens, sem ferramentas, 1 nova tentativa para timeout/429/5xx/rede, sem repetição para 400/401/403, tudo traduzido para `ModeloIndisponivelException`; JSON fora do schema vira `SaidaModeloInvalidaException` |
+| T057 | `ValidadorRespostaModelo`: resposta vazia, rótulo `T<n>` no texto, `conhecimentoSuficiente` sem referência, referência inexistente e preço, desconto, parcela, data, horário e vagas sem evidência literal nos trechos citados |
+| T058 | `DerivadorFontes`: fontes copiadas do MCP, sem repetição, na ordem do contexto |
+| T059 | `ResponderPerguntaService` completo: até 2 novas tentativas com o motivo da reprovação, `conhecimentoSuficiente=false` ou 3 reprovações → mensagem configurada, prazo único |
+| T060 | `PromptInjectionIT` (9) e `ServicosIntegradosIT` com a resposta de 200 e a fonte vinda do MCP real, contra o JAR da api-conhecimento |
+| T061 | Propriedades `spring.ai.chat.observations.*` e `spring.ai.chat.client.observations.*` conferidas no jar e fixadas em `false`; `LogsSemDadosSensiveisIT` (6) |
+
+#### Arquivos criados (em `api-atendimentos/src`)
+
+- `main`: `dominio/{ContextoRag, ReferenciaTrecho}`, `dominio/excecao/SaidaModeloInvalidaException`, `aplicacao/{MontadorContextoRag, ValidadorRespostaModelo, DerivadorFontes}`, `infraestrutura/ia/{RespostaModelo, ChatClientConfig, OpenAiGeradorRespostaAdapter}`, `resources/prompts/responder-pergunta.{system,user}.v1.st`
+- `test`: `aplicacao/{MontadorContextoRagTest, ValidadorRespostaModeloTest, DerivadorFontesTest}`, `infraestrutura/ia/OpenAiGeradorRespostaAdapterIT`, `integracao/{PromptInjectionIT, LogsSemDadosSensiveisIT}`, `suporte/TesteComOpenAiFalsa`
+- Removido: `infraestrutura/ia/GeradorRespostaNaoImplementado`
+
+#### Arquivos modificados
+
+- `dominio/RespostaGerada` (agora a saída crua do modelo: `resposta`, `conhecimentoSuficiente`, `referencias`), `aplicacao/ResponderPerguntaService`, `aplicacao/porta/GeradorRespostaPort` (recebe `ContextoRag`, motivo da reprovação e `Prazo`), `infraestrutura/config/{AtendimentoConfig, PropriedadesAtendimentos}`
+- `application.yml`: `contexto`, `validacao`, `prompt`, `resiliencia.chat-*`, observações do Spring AI em `false` e `logging.level.io.modelcontextprotocol: INFO`
+- Testes: `ResponderPerguntaServiceTest` (reescrito, 22), `ServicosIntegradosIT` (agora espera 200 com a fonte), `suporte/OpenAiFalsa` (endpoint de chat roteirizado), `LimiteTamanhoCorpoFilterTest`
+- `README.md`, `specs/{04, 05, 08}`
+
+#### Comandos executados e resultados
+
+| Comando | Resultado |
+|---|---|
+| `./mvnw -B -pl api-atendimentos test -Dtest='ResponderPerguntaServiceTest,OpenAiGeradorRespostaAdapterIT'` | 1ª execução: falhou a compilação dos testes antigos; depois, 1 falha por partida a frio (ver "Decisões"); final: 44 de 44 |
+| `... -Dtest='PromptInjectionIT'` | 1ª execução **FALHOU** (503 no primeiro teste, partida a frio); depois do aquecimento, 9 de 9 |
+| `... -Dtest='LogsSemDadosSensiveisIT'` | 1ª execução **FALHOU** (5 de 5): o SDK do MCP loga a pergunta e os trechos em `DEBUG`. Corrigido (ver "Decisões"); final 6 de 6 |
+| `./mvnw -B clean verify` (raiz), final | **BUILD SUCCESS**: `api-conhecimento` **539 testes**, 0 falhas, 1 ignorado; `api-atendimentos` **351 testes** (eram 256), 0 falhas, 1 ignorado |
+
+#### Decisões e desvios
+
+- **Degrau da solução:** RAG com validação em código e uma chamada ao modelo (sem agente, sem ferramentas). Descartei dar a ferramenta MCP ao modelo (agente): aumentaria custo e superfície de ataque sem ganho, já que a busca é determinística.
+- **Fontes saem do MCP, nunca do modelo.** O modelo só devolve rótulos `T<n>`; descartei pedir título/fonte ao modelo porque ele poderia inventá-los.
+- **Validação de valores é conservadora.** Reprova padrão de valor (R$, %, `6x`, datas, horários, vagas) sem evidência literal normalizada (sem espaço, caixa e acento). Números comuns ("2 anos", "40 horas") não reprovam. Um `2x` ou `3h` sem relação com preço também reprova (falso positivo aceito: o aluno recebe a mensagem de recusa em vez de um valor possivelmente inventado).
+- **Campo ausente na saída do modelo é saída inválida** (`required=true`), não valor padrão.
+- **Lacuna fechada na T060:** a pergunta do aluno entrava no prompt sem neutralizar delimitadores (dava para forjar `</pergunta>`). O serviço passa a sanitizar o texto enviado ao modelo; a busca MCP continua com a pergunta mascarada.
+- **`RespostaGerada` aceita referência nula** para o validador reprovar em vez de uma `NullPointerException`.
+- **Achado de log (T061):** com `io.modelcontextprotocol` em `DEBUG` o SDK escreve o JSON-RPC inteiro (pergunta mascarada e texto dos trechos). O logger ficou fixo em `INFO` no `application.yml`; quem o subir de propósito reabre o vazamento. Com `DEBUG` em `org.springframework.ai`, `com.openai` e `br.com.coti` nada sensível aparece.
+- **Sem WireMock:** a `OpenAiFalsa` (servidor do JDK) ganhou o chat roteirizado. Nenhuma dependência nova.
+- **Partida a frio nos testes:** a primeira chamada da JVM passa de 1,5 s; `TesteComOpenAiFalsa` aquece uma vez. Em produção o limite é 20 s.
+- **`ServicosIntegradosIT` apontava o chat para a OpenAI real** (com chave falsa, e passava por causa do 401). Agora usa a OpenAI falsa. Os demais testes que chegam ao gerador usam `TesteComOpenAiFalsa` ou dublê do serviço.
+
+#### Pendências e riscos
+
+- **Nenhuma prova com o modelo real.** Nem formato (`json_schema` estrito aceito pelo `OPENAI_CHAT_MODEL` que você configurou), nem qualidade das respostas, nem eval. Nome e comportamento do modelo `gpt-6-luna` que apareceu no seu `.env` **não conferi**. Precisa da sua autorização para um teste com a chave real (custo; pergunta e trechos de teste, sem dado pessoal) e dos documentos reais (T067) para o eval da Fase 8.
+- **Mensagens do `.env`.** `ATENDIMENTO_MENSAGEM_SEM_EVIDENCIA` e `ATENDIMENTO_CANAL_HUMANO` estão como hexadecimais aleatórios (pelos comandos que você rodou); troque por texto de verdade, por exemplo "Não encontrei essa informação nos materiais oficiais da COTI." e "Fale com a nossa equipe: https://www.coti.com.br/contato". Não li nem editei o `.env`.
+- **LGPD, transferência internacional (art. 33):** a pergunta mascarada e os trechos agora vão à OpenAI. Mascarar CPF, e-mail e telefone não cobre nome próprio nem dado livre digitado. Confirmar contrato de operador, sem treino com o dado e com retenção definida, antes de produção. Não sei se isso existe no projeto.
+- **Falso positivo do validador** em `Nx`/`Nh` sem relação com preço pode recusar respostas legítimas; medir no eval.
+- **Sem validação no Docker nesta fase:** o chat só tem OpenAI simulada nos testes automatizados; subir a stack com a chave falsa não exercita a geração.
+- **Janela de contexto e custo:** 8.000 caracteres de trechos + prompt + 600 tokens de saída por tentativa, até 3 tentativas por pergunta; o teto diário de custo continua para a Fase 8/produção.
+- Itens antigos: allowlists de e-mail e telefone institucionais vazias, scanner de segredos (T066), documentos reais (T067).
+
+#### Próxima fase
+
+**Fase 8 — Testes, segurança e observabilidade** (T062–T075). T062 (limite de requisições) já foi feita antes da Fase 7. A próxima é a **T063** (acesso restrito a métricas). T066 depende de você aprovar a ferramenta do verificador de segredos (proposta: gitleaks, MIT) e T067 dos documentos reais.
 
 ---
 

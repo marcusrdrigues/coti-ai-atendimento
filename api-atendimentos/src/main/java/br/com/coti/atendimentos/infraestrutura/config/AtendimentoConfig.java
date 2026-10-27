@@ -1,6 +1,9 @@
 package br.com.coti.atendimentos.infraestrutura.config;
 
+import br.com.coti.atendimentos.aplicacao.DerivadorFontes;
+import br.com.coti.atendimentos.aplicacao.MontadorContextoRag;
 import br.com.coti.atendimentos.aplicacao.ResponderPerguntaService;
+import br.com.coti.atendimentos.aplicacao.ValidadorRespostaModelo;
 import br.com.coti.atendimentos.aplicacao.porta.BaseConhecimentoPort;
 import br.com.coti.atendimentos.aplicacao.porta.GeradorRespostaPort;
 import br.com.coti.atendimentos.aplicacao.porta.MascaradorPort;
@@ -59,12 +62,31 @@ public class AtendimentoConfig {
     }
 
     @Bean
+    MontadorContextoRag montadorContextoRag(PropriedadesAtendimentos propriedades) {
+        PropriedadesAtendimentos.Contexto c = propriedades.contexto();
+        return new MontadorContextoRag(new MontadorContextoRag.Limites(propriedades.busca().limiarSimilaridade(),
+                c.maximoCaracteresTrecho(), c.maximoCaracteresTotal(), c.maximoTrechos()));
+    }
+
+    @Bean
+    ValidadorRespostaModelo validadorRespostaModelo() {
+        return new ValidadorRespostaModelo();
+    }
+
+    @Bean
+    DerivadorFontes derivadorFontes() {
+        return new DerivadorFontes();
+    }
+
+    @Bean
     ResponderPerguntaService responderPerguntaService(MascaradorPort mascarador, BaseConhecimentoPort base,
-                                                      GeradorRespostaPort gerador, PropriedadesAtendimentos propriedades,
-                                                      Clock relogio) {
+                                                      MontadorContextoRag montador, GeradorRespostaPort gerador,
+                                                      ValidadorRespostaModelo validador, DerivadorFontes derivador,
+                                                      PropriedadesAtendimentos propriedades, Clock relogio) {
         PropriedadesAtendimentos.Mensagens m = propriedades.mensagens();
-        return new ResponderPerguntaService(mascarador, base, gerador,
+        return new ResponderPerguntaService(mascarador, base, montador, gerador, validador, derivador,
                 new ResponderPerguntaService.MensagensSemEvidencia(m.semEvidencia(), m.canalHumano()),
-                propriedades.busca().limite(), propriedades.resiliencia().prazoTotal(), relogio);
+                propriedades.busca().limite(), propriedades.resiliencia().prazoTotal(),
+                propriedades.validacao().novasTentativasSaida(), relogio);
     }
 }

@@ -1,5 +1,6 @@
 package br.com.coti.atendimentos.infraestrutura.seguranca;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -54,6 +55,14 @@ class SegurancaTest {
                 .andExpect(status().is4xxClientError())
                 .andExpect(header().doesNotExist("Set-Cookie"))
                 .andExpect(jsonPath("$.codigo").value("TIPO_MIDIA_NAO_SUPORTADO"));
+    }
+
+    @Autowired
+    private org.springframework.context.ApplicationContext contexto;
+
+    @Test
+    void naoCriaUsuarioEmMemoriaNemSenhaGeradaNoLog() {
+        assertThat(contexto.getBeansOfType(org.springframework.security.core.userdetails.UserDetailsService.class)).isEmpty();
     }
 
     @Test

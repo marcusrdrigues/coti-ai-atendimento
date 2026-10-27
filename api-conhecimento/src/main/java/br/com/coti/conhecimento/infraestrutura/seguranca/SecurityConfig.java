@@ -1,7 +1,10 @@
 package br.com.coti.conhecimento.infraestrutura.seguranca;
 
+import br.com.coti.conhecimento.api.erro.EscritorProblema;
 import br.com.coti.conhecimento.infraestrutura.config.PropriedadesConhecimento;
 import jakarta.servlet.DispatcherType;
+import java.time.Clock;
+import java.time.Duration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -30,6 +33,16 @@ public class SecurityConfig {
     static final String PAPEL_MONITORAMENTO = "MONITORAMENTO";
     static final String PAPEL_SERVICO_ATENDIMENTO = "SERVICO_ATENDIMENTO";
 
+    /** Baldes de requisições por credencial (ADR-12), em memória e por instância. */
+    @Bean
+    BaldesDeRequisicao baldesDeRequisicao(PropriedadesConhecimento propriedades, Clock relogio) {
+        PropriedadesConhecimento.LimitesRequisicao limites = propriedades.limitesRequisicao();
+        Duration janela = Duration.ofMinutes(1);
+        return new BaldesDeRequisicao(
+                new BaldeTokens(limites.cadastroPorMinuto(), janela, relogio, limites.maximoDeCredenciais()),
+                new BaldeTokens(limites.diagnosticoPorMinuto(), janela, relogio, limites.maximoDeCredenciais()));
+    }
+
     @Bean
     @Order(1)
     SecurityFilterChain cadeiaMonitoramento(HttpSecurity http, PropriedadesConhecimento propriedades,
@@ -53,7 +66,8 @@ public class SecurityConfig {
     @Bean
     @Order(2)
     SecurityFilterChain cadeiaApi(HttpSecurity http, PropriedadesConhecimento propriedades,
-                                  RespostaSegurancaProblema resposta) throws Exception {
+                                  RespostaSegurancaProblema resposta, EscritorProblema escritor,
+                                  BaldesDeRequisicao baldes) throws Exception {
         http.securityMatcher("/api/**");
         http.authorizeHttpRequests(a -> {
             a.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll();
@@ -62,6 +76,7 @@ public class SecurityConfig {
         return comBase(http, resposta)
                 .addFilterBefore(new ApiKeyAuthFilter(propriedades.seguranca().adminApiKey(),
                         "gestor-conteudo", PAPEL_GESTOR), AnonymousAuthenticationFilter.class)
+                .addFilterAfter(new LimiteRequisicoesFilter(baldes, escritor), ApiKeyAuthFilter.class)
                 .build();
     }
 

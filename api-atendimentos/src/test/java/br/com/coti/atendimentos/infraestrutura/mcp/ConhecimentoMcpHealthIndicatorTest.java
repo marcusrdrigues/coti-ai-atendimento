@@ -111,6 +111,19 @@ class ConhecimentoMcpHealthIndicatorTest {
     }
 
     @Test
+    void oResultadoRuimFicaEmCacheSoPorDoisSegundosParaAVoltaAoUpNaoDemorar() {
+        when(cliente.listTools()).thenThrow(new RuntimeException("sessao perdida")).thenReturn(ferramentas("buscar_conhecimento"));
+        ConhecimentoMcpHealthIndicator i = criar(Duration.ofSeconds(10));
+
+        assertThat(i.health().getStatus()).isEqualTo(ConhecimentoMcpHealthIndicator.DEGRADADO);
+        relogio.avancar(Duration.ofSeconds(1));
+        assertThat(i.health().getStatus()).as("ainda em cache").isEqualTo(ConhecimentoMcpHealthIndicator.DEGRADADO);
+        relogio.avancar(Duration.ofSeconds(1));
+
+        assertThat(i.health().getStatus()).as("2 s depois verifica de novo e volta a UP").isEqualTo(Status.UP);
+    }
+
+    @Test
     void verificaDeNovoDepoisDaValidade() {
         when(cliente.listTools()).thenReturn(ferramentas("buscar_conhecimento"));
         ConhecimentoMcpHealthIndicator i = criar(Duration.ofSeconds(10));

@@ -137,26 +137,26 @@ Legenda: `CON` = `api-conhecimento`, `ATE` = `api-atendimentos`, `INF` = infraes
 
 ## Fase 7 — Integração com OpenAI e montagem do contexto RAG
 
-- [ ] **T054** `ATE` — `ContextoRag`, `ReferenciaTrecho` e `MontadorContextoRag` (contrato §6.3).
+- [x] **T054** `ATE` — `ContextoRag`, `ReferenciaTrecho` e `MontadorContextoRag` (contrato §6.3).
   Dep.: T045. Verificação: `MontadorContextoRagTest`: limiar, `similaridade` nula no fim, neutralização de delimitadores, escape de aspas, 2.000/8.000/5 com remoção dos de menor similaridade, rótulos `T1..Tn`.
-- [ ] **T055** `ATE` — Prompts `responder-pergunta.system.v1.st` e `responder-pergunta.user.v1.st` com delimitadores e regras do contrato §6.3–6.4.
+- [x] **T055** `ATE` — Prompts `responder-pergunta.system.v1.st` e `responder-pergunta.user.v1.st` com delimitadores e regras do contrato §6.3–6.4.
   Dep.: T054. Verificação: teste carrega os recursos e confirma um único bloco `<trechos>` e um `<pergunta>` no prompt renderizado.
-- [ ] **T056** `ATE` — `RespostaModelo` (`record`), `ChatClientConfig` (sem ferramentas) e `OpenAiGeradorRespostaAdapter` (saída estruturada nativa, temperatura 0, 600 tokens, modelo de `OPENAI_CHAT_MODEL`, 1 nova tentativa em transitório, tradução para `ModeloIndisponivelException`).
-  Dep.: T051, T055. Verificação: `OpenAiGeradorRespostaAdapterIT` com WireMock (200 válido, 429, 500, timeout, 401, JSON inválido) e conferência da requisição enviada (sem `tools`).
-- [ ] **T057** `ATE` — `ValidadorRespostaModelo`: referência inexistente, `conhecimentoSuficiente` sem referência, valores monetários, datas, horários, vagas e condições comerciais sem evidência literal.
+- [x] **T056** `ATE` — `RespostaModelo` (`record`), `ChatClientConfig` (sem ferramentas) e `OpenAiGeradorRespostaAdapter` (saída estruturada nativa, temperatura 0, 600 tokens, modelo de `OPENAI_CHAT_MODEL`, 1 nova tentativa em transitório, tradução para `ModeloIndisponivelException`).
+  Dep.: T051, T055. Verificação: `OpenAiGeradorRespostaAdapterIT` com a `OpenAiFalsa` (sem WireMock; 200 válido, 429, 500, timeout, 401, JSON inválido) e conferência da requisição enviada (sem `tools`).
+- [x] **T057** `ATE` — `ValidadorRespostaModelo`: referência inexistente, `conhecimentoSuficiente` sem referência, valores monetários, datas, horários, vagas e condições comerciais sem evidência literal.
   Dep.: T054. Verificação: `ValidadorRespostaModeloTest` com positivos e falsos positivos conhecidos ("2 anos de experiência" não reprova).
-- [ ] **T058** `ATE` — `DerivadorFontes`: cópia dos campos do trecho MCP pelas referências, sem repetição, ordenada; rótulos fora da resposta.
+- [x] **T058** `ATE` — `DerivadorFontes`: cópia dos campos do trecho MCP pelas referências, sem repetição, ordenada; rótulos fora da resposta.
   Dep.: T054. Verificação: `DerivadorFontesTest`.
-- [ ] **T059** `ATE` — `ResponderPerguntaService` completo: geração, até 2 novas tentativas por saída reprovada com o motivo, `conhecimentoSuficiente=false` → mensagem configurada, fontes, prazo.
+- [x] **T059** `ATE` — `ResponderPerguntaService` completo: geração, até 2 novas tentativas por saída reprovada com o motivo, `conhecimentoSuficiente=false` → mensagem configurada, fontes, prazo.
   Dep.: T056, T057, T058. Verificação: `ResponderPerguntaServiceTest` completo.
-- [ ] **T060** `ATE` — `AtendimentoFimAFimIT` e `PromptInjectionIT` com `ServidorMcpDeTeste` + WireMock: resposta com fontes iguais ao MCP, referência inventada, preço inventado, delimitador forjado no trecho, resposta sem prompt/modelo/tokens.
+- [x] **T060** `ATE` — `ServicosIntegradosIT` (fim a fim contra a api-conhecimento real) e `PromptInjectionIT` com `ServidorMcpDeTeste` + `OpenAiFalsa`: resposta com fontes iguais ao MCP, referência inventada, preço inventado, delimitador forjado no trecho, resposta sem prompt/modelo/tokens.
   Dep.: T059. Verificação: testes passam.
-- [ ] **T061** `ATE` **(spike)** — Confirmar e configurar a propriedade que mantém o conteúdo de prompt e completion fora das observações do Spring AI.
+- [x] **T061** `ATE` **(spike)** — Confirmar e configurar a propriedade que mantém o conteúdo de prompt e completion fora das observações do Spring AI.
   Dep.: T056. Verificação: teste de captura de log com o fluxo completo sem a pergunta.
 
 ## Fase 8 — Testes, segurança e observabilidade
 
-- [ ] **T062** `CON` `ATE` — `LimiteRequisicoesFilter` e `BaldeTokens`: `perguntar` 10/min por IP; cadastro 30/min e diagnóstico 10/min por credencial; 429 com `Retry-After`.
+- [x] **T062** `CON` `ATE` — `LimiteRequisicoesFilter` e `BaldeTokens`: `perguntar` 10/min por IP; cadastro 30/min e diagnóstico 10/min por credencial; 429 com `Retry-After`.
   Dep.: T039, T047. Verificação: `LimiteRequisicoesFilterTest` e `LimiteRequisicoesIT`.
 - [ ] **T063** `CON` `ATE` — Métricas `coti.atendimento.resultado`, `coti.atendimento.etapa.duracao`, `coti.atendimento.saida_reprovada`, `coti.conhecimento.cadastro`, com tags de versão de prompt e modelos.
   Dep.: T036, T059. Verificação: `MetricasAtendimentoIT` lê as métricas via Actuator com a chave de monitoramento.

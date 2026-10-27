@@ -26,7 +26,11 @@ public record PropriedadesAtendimentos(
         @Valid @NotNull Mensagens mensagens,
         @Valid @DefaultValue Web web,
         @Valid @DefaultValue Busca busca,
+        @Valid @DefaultValue Contexto contexto,
+        @Valid @DefaultValue Validacao validacao,
+        @Valid @DefaultValue Prompt prompt,
         @Valid @DefaultValue Resiliencia resiliencia,
+        @Valid @DefaultValue LimitesRequisicao limitesRequisicao,
         @DefaultValue("false") boolean documentacaoPublica) {
 
     /**
@@ -97,6 +101,27 @@ public record PropriedadesAtendimentos(
             @DecimalMin("0.0") @DecimalMax("1.0") @DefaultValue("0.70") double limiarSimilaridade) {
     }
 
+    /** Tamanho do contexto entregue ao modelo (contrato, seção 6.3). */
+    public record Contexto(
+            @Positive @DefaultValue("2000") int maximoCaracteresTrecho,
+            @Positive @DefaultValue("8000") int maximoCaracteresTotal,
+            @Positive @DefaultValue("5") int maximoTrechos) {
+    }
+
+    /** Quantas vezes a saída reprovada volta ao modelo com o motivo (contrato, seção 6.4). */
+    public record Validacao(@PositiveOrZero @DefaultValue("2") int novasTentativasSaida) {
+    }
+
+    /** Versão dos arquivos de prompt em {@code prompts/}; muda por pull request, com o resultado do eval. */
+    public record Prompt(@NotBlank @Pattern(regexp = "^[a-z0-9.-]+$") @DefaultValue("v1") String versao) {
+    }
+
+    /** Limite de perguntas por IP (RF06), em memória e por instância (ADR-12). */
+    public record LimitesRequisicao(
+            @Positive @DefaultValue("10") int perguntasPorMinutoPorIp,
+            @Positive @DefaultValue("10000") int maximoDeIps) {
+    }
+
     /** Tempos e novas tentativas (RNF04, ADR-13). O backoff é exponencial com variação aleatória. */
     public record Resiliencia(
             @DefaultValue("5s") Duration mcpTempoLimite,
@@ -108,6 +133,8 @@ public record PropriedadesAtendimentos(
             @DefaultValue("2s") Duration atrasoMaximo,
             @DefaultValue("100ms") Duration jitter,
             @DefaultValue("2s") Duration saudeTempoLimite,
-            @DefaultValue("10s") Duration saudeValidade) {
+            @DefaultValue("10s") Duration saudeValidade,
+            @DefaultValue("20s") Duration chatTempoLimite,
+            @PositiveOrZero @DefaultValue("1") int chatNovasTentativas) {
     }
 }

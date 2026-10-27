@@ -21,7 +21,9 @@ import org.springframework.test.context.ContextConfiguration;
         "OPENAI_API_KEY=" + ChavesTeste.OPENAI,
         "CONHECIMENTO_ADMIN_API_KEY=" + ChavesTeste.ADMIN,
         "MONITORAMENTO_API_KEY=" + ChavesTeste.MONITORAMENTO,
-        "CONHECIMENTO_MCP_API_KEY=" + ChavesTeste.MCP
+        "CONHECIMENTO_MCP_API_KEY=" + ChavesTeste.MCP,
+        "coti.conhecimento.limites-requisicao.cadastro-por-minuto=100000",
+        "coti.conhecimento.limites-requisicao.diagnostico-por-minuto=100000"
 })
 @ContextConfiguration(initializers = PostgresContainerConfig.class)
 @Import(EmbeddingFalsoConfig.class)

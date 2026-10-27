@@ -29,6 +29,7 @@ import org.springframework.boot.health.contributor.Status;
 public final class ConhecimentoMcpHealthIndicator implements HealthIndicator, AutoCloseable {
 
     public static final Status DEGRADADO = new Status("DEGRADADO");
+    static final Duration VALIDADE_DO_DEGRADADO = Duration.ofSeconds(2);
 
     private static final Logger log = LoggerFactory.getLogger(ConhecimentoMcpHealthIndicator.class);
 
@@ -56,12 +57,21 @@ public final class ConhecimentoMcpHealthIndicator implements HealthIndicator, Au
     @Override
     public synchronized Health health() {
         Instant agora = relogio.instant();
-        if (ultimo != null && verificadoEm.plus(validade).isAfter(agora)) {
+        if (ultimo != null && verificadoEm.plus(validadeDoUltimo()).isAfter(agora)) {
             return ultimo;
         }
         ultimo = verificar();
         verificadoEm = agora;
         return ultimo;
+    }
+
+    /**
+     * Resultado bom vale {@code validade}; resultado ruim vale pouco ({@link #VALIDADE_DO_DEGRADADO}). Depois que a
+     * api-conhecimento reinicia, a primeira verificação falha com a sessão MCP antiga e a seguinte funciona; guardar
+     * o resultado ruim por muito tempo atrasaria a volta do status {@code UP}.
+     */
+    private Duration validadeDoUltimo() {
+        return Status.UP.equals(ultimo.getStatus()) ? validade : validade.compareTo(VALIDADE_DO_DEGRADADO) < 0 ? validade : VALIDADE_DO_DEGRADADO;
     }
 
     private Health verificar() {

@@ -7,6 +7,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import br.com.coti.atendimentos.suporte.AmbienteIntegrado;
 import br.com.coti.atendimentos.suporte.ChavesTeste;
+import br.com.coti.atendimentos.suporte.OpenAiFalsa;
+import br.com.coti.atendimentos.suporte.OpenAiFalsa.RespostaChat;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,8 +25,8 @@ import org.springframework.test.web.servlet.ResultActions;
 /**
  * T053: a {@code api-atendimentos} contra a {@code api-conhecimento} de verdade (o JAR empacotado, com PostgreSQL
  * e pgvector reais). O único dublê é a OpenAI, que só responde embeddings. Prova o fluxo ponta a ponta até o
- * ponto em que a Fase 6 termina: pergunta mascarada → ferramenta MCP → busca vetorial → sem evidência, ou
- * trechos até o gerador (que só existe na Fase 7).
+ * fim: pergunta mascarada → ferramenta MCP → busca vetorial → sem evidência, ou contexto → modelo (roteirizado) →
+ * validação → resposta com a fonte vinda do MCP.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK, properties = {
         "OPENAI_API_KEY=" + ChavesTeste.OPENAI,
@@ -47,6 +49,8 @@ class ServicosIntegradosIT {
     static void conectarAoConhecimento(DynamicPropertyRegistry registro) {
         registro.add("CONHECIMENTO_MCP_URL", () -> ambiente.urlConhecimento());
         registro.add("CONHECIMENTO_MCP_API_KEY", () -> ambiente.chaveMcp());
+        // O chat também vai para a OpenAI falsa: nenhum teste sai da máquina.
+        registro.add("spring.ai.openai.base-url", () -> ambiente.openAi().urlBase());
     }
 
     @Autowired
@@ -55,6 +59,7 @@ class ServicosIntegradosIT {
     @BeforeEach
     void limpar() {
         ambiente.openAi().limpar();
+        ambiente.openAi().limparChat();
     }
 
     private ResultActions perguntar(String pergunta) throws Exception {
@@ -82,7 +87,7 @@ class ServicosIntegradosIT {
     }
 
     @Test
-    void perguntaComEvidenciaChegaAoGeradorQueAindaNaoExisteNaFase6() throws Exception {
+    void perguntaComEvidenciaDevolve200ComAFonteDoDocumentoCadastrado() throws Exception {
         String conteudo = "Para o curso Java Fullstack é recomendado conhecimento básico de lógica de programação "
                 + "e familiaridade com o computador. Identificador " + UUID.randomUUID() + ".";
         assertThat(ambiente.cadastrarConhecimento("Curso Java — pré-requisitos", conteudo, "Site COTI, out/2026",
@@ -90,12 +95,19 @@ class ServicosIntegradosIT {
         assertThat(ambiente.openAi().textosRecebidos()).as("na ingestão o embedding recebe só o texto do trecho")
                 .containsExactly(conteudo);
         ambiente.openAi().limpar();
+        ambiente.openAi().roteirizarChat(RespostaChat.ok(OpenAiFalsa.saida(
+                "É recomendado ter conhecimento básico de lógica de programação.", true, "T1")));
 
-        // O trecho foi recuperado pela ferramenta MCP (senão a resposta seria "sem evidência" com 200). Como o
-        // gerador de respostas só entra na Fase 7, o fluxo termina em 503 MODELO_INDISPONIVEL. Na Fase 7 este
-        // teste passa a esperar 200 com a fonte do documento cadastrado.
-        perguntar(conteudo).andExpect(status().isServiceUnavailable())
-                .andExpect(jsonPath("$.codigo").value("MODELO_INDISPONIVEL"));
+        // O trecho foi recuperado pela ferramenta MCP, entrou no prompt como T1 e a fonte devolvida vem do MCP,
+        // não do que o modelo escreveu.
+        perguntar(conteudo).andExpect(status().isOk())
+                .andExpect(jsonPath("$.conhecimentoSuficiente").value(true))
+                .andExpect(jsonPath("$.resposta").value("É recomendado ter conhecimento básico de lógica de programação."))
+                .andExpect(jsonPath("$.fontes.length()").value(1))
+                .andExpect(jsonPath("$.fontes[0].titulo").value("Curso Java — pré-requisitos"))
+                .andExpect(jsonPath("$.fontes[0].fonte").value("Site COTI, out/2026"));
         assertThat(ambiente.openAi().textosRecebidos()).containsExactly(conteudo);
+        assertThat(ambiente.openAi().requisicoesDeChat()).hasSize(1);
+        assertThat(ambiente.openAi().requisicoesDeChat().get(0)).contains("<trechos>", "ref=\\\"T1\\\"");
     }
 }

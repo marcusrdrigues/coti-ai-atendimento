@@ -1,20 +1,25 @@
 package br.com.coti.atendimentos.dominio;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
- * Resposta produzida pelo gerador, já validada. As fontes são os trechos da ferramenta MCP que sustentam o texto;
- * nunca vêm do modelo. {@code conhecimentoSuficiente = false} obriga a lista de citados vazia.
+ * Saída do modelo como ele a devolveu (contrato, seção 6.4), ainda NÃO validada: as referências são os rótulos
+ * {@code T<n>} que o modelo disse ter usado. Só vira resposta ao aluno depois de passar pelo validador e de as
+ * fontes serem derivadas do resultado MCP.
  */
-public record RespostaGerada(String resposta, boolean conhecimentoSuficiente, List<TrechoConhecimento> citados) {
+public record RespostaGerada(String resposta, boolean conhecimentoSuficiente, List<String> referencias) {
 
     public RespostaGerada {
-        citados = List.copyOf(citados);
-        if (conhecimentoSuficiente && citados.isEmpty()) {
-            throw new IllegalArgumentException("conhecimento suficiente exige ao menos um trecho citado");
-        }
-        if (!conhecimentoSuficiente && !citados.isEmpty()) {
-            throw new IllegalArgumentException("sem conhecimento suficiente, nenhum trecho é citado");
-        }
+        // Cópia imutável que aceita elemento nulo: o JSON do modelo pode trazer {@code [null]} e quem reprova é o
+        // validador, não uma NullPointerException aqui.
+        referencias = referencias == null ? List.of() : Collections.unmodifiableList(new ArrayList<>(referencias));
+    }
+
+    /** O texto do modelo não vai para log. */
+    @Override
+    public String toString() {
+        return "RespostaGerada[conhecimentoSuficiente=" + conhecimentoSuficiente + ", referencias=" + referencias + "]";
     }
 }

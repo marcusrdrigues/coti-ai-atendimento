@@ -10,6 +10,11 @@ server:
 spring:
   application:
     name: api-conhecimento
+  autoconfigure:
+    exclude:
+      # A autenticação é por chave de API em filtros próprios. Sem esta exclusão o Spring cria um usuário em memória
+      # e imprime a senha gerada no log da subida (credencial em log).
+      - org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
   threads:
     virtual:
       enabled: true
@@ -99,6 +104,10 @@ coti:
       texto-maximo-por-trecho: 2000
       texto-maximo-total: 8000
       tempo-limite: 5s # inclui o embedding da pergunta (RNF04)
+    limites-requisicao: # por credencial administrativa; cadastro e diagnóstico têm baldes separados
+      cadastro-por-minuto: 30
+      diagnostico-por-minuto: 10
+      maximo-de-credenciais: 100
     analise:
       # Padrões de prompt injection (regex, sem diferenciar maiúsculas). Documento que casar fica EM_REVISAO.
       padroes-injecao:
