@@ -97,19 +97,19 @@ Legenda: `CON` = `api-conhecimento`, `ATE` = `api-atendimentos`, `INF` = infraes
 
 ## Fase 5 — Busca vetorial e MCP Server
 
-- [ ] **T037** `CON` **(spike)** — `ScoreCossenoIT`: confirmar que `Document.getScore()` com `COSINE_DISTANCE` é similaridade de 0 a 1 e que `gte` sobre inteiro funciona no filtro JSONPath.
+- [x] **T037** `CON` **(spike)** — `ScoreCossenoIT`: confirmar que `Document.getScore()` com `COSINE_DISTANCE` é similaridade de 0 a 1 e que `gte` sobre inteiro funciona no filtro JSONPath.
   Dep.: T035. Verificação: teste versionado e resultado registrado em `04-plan.md`.
-- [ ] **T038** `CON` — `BuscarConhecimentoService`: validação (`pergunta` 3–1.000, `limite` 1–10, padrão 5), timeout de 5 s no embedding da pergunta, filtro (`PUBLICADO`, modelo, vigência), limiar 0,70, ordenação, cortes 2.000/8.000.
+- [x] **T038** `CON` — `BuscarConhecimentoService`: validação (`pergunta` 3–1.000, `limite` 1–10, padrão 5), timeout de 5 s no embedding da pergunta, filtro (`PUBLICADO`, modelo, vigência), limiar 0,70, ordenação, cortes 2.000/8.000.
   Dep.: T037. Verificação: `BuscarConhecimentoServiceTest` e `BuscaVetorialIT` (`EM_REVISAO`, `PROCESSANDO`, vencido e outro modelo nunca aparecem; lista vazia é sucesso).
-- [ ] **T039** `CON` — `DiagnosticoBuscaController` (RF12) com DTOs `record`, chave administrativa e campos de diagnóstico.
+- [x] **T039** `CON` — `DiagnosticoBuscaController` (RF12) com DTOs `record`, chave administrativa e campos de diagnóstico.
   Dep.: T026, T038. Verificação: `DiagnosticoBuscaControllerTest` (400, 401, 200 com `limiarSimilaridade`, `modeloEmbedding`, `duracaoMs`).
-- [ ] **T040** `CON` — MCP Server: starter webmvc, `protocol: STREAMABLE`, `BuscarConhecimentoTool` (`@McpTool` com anotações de somente leitura, `generateOutputSchema`), `ResultadoBusca`, `TrechoResultado`, erros como `RuntimeException` com `ErroFerramenta`.
+- [x] **T040** `CON` — MCP Server: starter webmvc, `protocol: STREAMABLE`, `BuscarConhecimentoTool` (`@McpTool` com anotações de somente leitura, `generateOutputSchema`), `ResultadoBusca`, `TrechoResultado`, erros como `RuntimeException` com `ErroFerramenta`.
   Dep.: T038. Verificação: teste unitário da ferramenta com o serviço falso.
-- [ ] **T041** `CON` — Cadeia de segurança de `/mcp/**` com `Bearer CONHECIMENTO_MCP_API_KEY`; chave administrativa recusada.
+- [x] **T041** `CON` — Cadeia de segurança de `/mcp/**` com `Bearer CONHECIMENTO_MCP_API_KEY`; chave administrativa recusada.
   Dep.: T014, T040. Verificação: `SegurancaMcpIT` (sem chave, chave errada e chave administrativa → 401).
-- [ ] **T042** `CON` — `BuscarConhecimentoToolContratoIT` com cliente MCP real em porta aleatória: `tools/list` (schemas e anotações do contrato §4.2), `tools/call` válido, `limite` padrão, argumentos inválidos (`ARGUMENTOS_INVALIDOS`), banco indisponível (`BASE_CONHECIMENTO_INDISPONIVEL`), formato do texto de erro.
+- [x] **T042** `CON` — `BuscarConhecimentoToolContratoIT` com cliente MCP real em porta aleatória: `tools/list` (schemas e anotações do contrato §4.2), `tools/call` válido, `limite` padrão, argumentos inválidos (`ARGUMENTOS_INVALIDOS`), banco indisponível (`BASE_CONHECIMENTO_INDISPONIVEL`), formato do texto de erro.
   Dep.: T041. Verificação: teste passa; divergências de schema geradas pelo `@McpTool` registradas.
-- [ ] **T043** `CON` — `DiagnosticoIgualMcpIT`: mesma pergunta pelo diagnóstico e pelo MCP devolve os mesmos trechos e similaridades.
+- [x] **T043** `CON` — `DiagnosticoIgualMcpIT`: mesma pergunta pelo diagnóstico e pelo MCP devolve os mesmos trechos e similaridades.
   Dep.: T039, T042. Verificação: teste passa.
 
 ## Fase 6 — MCP Client e API de Atendimentos

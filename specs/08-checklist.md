@@ -19,7 +19,7 @@ Convenção: só se registra como "passou" um teste que foi executado, com o com
 | 2 — Estrutura Maven e inicialização dos dois microsserviços | **Concluída** | T008–T018 (11/11) | 2026-10-22 |
 | 3 — Persistência e ingestão de conhecimento | **Concluída** | T019–T027 (9/9) | 2026-10-23 |
 | 4 — Chunking e geração de embeddings | **Concluída** | T028–T036 (9/9) | 2026-10-26 |
-| 5 — Busca vetorial e MCP Server | Pendente | T037–T043 | — |
+| 5 — Busca vetorial e MCP Server | **Concluída** | T037–T043 (7/7) | 2026-10-27 |
 | 6 — MCP Client e API de Atendimentos | Pendente | T044–T053 | — |
 | 7 — Integração com OpenAI e contexto RAG | Pendente | T054–T061 | — |
 | 8 — Testes, segurança e observabilidade | Pendente | T062–T075 | — |
@@ -412,6 +412,95 @@ Nenhum teste Java foi executado nesta fase: ainda não existe código Java (Fase
 #### Próxima fase
 
 **Fase 5 — Busca vetorial e MCP Server** (T037–T043). A primeira tarefa é a **T037**, um spike (`ScoreCossenoIT`) para confirmar como o Spring AI 2.0.1 devolve a similaridade antes de fixar o limiar de relevância.
+
+---
+
+---
+
+### Fase 5 — Busca vetorial e MCP Server
+
+**Status:** concluída. **Data:** 2026-10-27. **Tarefas:** T037 a T043 (7 de 7).
+
+#### O que foi entregue
+
+| Tarefa | Resultado |
+|---|---|
+| T037 | Spike `ScoreCossenoIT` (12 testes): o score é o cosseno (`1 - distância`), o limiar padrão 0 mantém tudo em [0, 1], `gte` sobre inteiro filtra a vigência dentro da busca, e o **risco do HNSW foi medido** (ver decisões). Resultados em `04-plan.md` §3 |
+| T038 | `BuscarConhecimentoService`: valida (pergunta 3 a 1.000 após `strip`, limite 1 a 10, padrão 5), busca com tempo limite de 5 s, ordena, corta 2.000 por trecho e 8.000 no total (sai inteiro o de menor similaridade). Porta `BuscaVetorialPort` e `PgVectorBuscaAdapter` (filtro de `PUBLICADO`, modelo e vigência dentro da consulta; falhas traduzidas para `ModeloIndisponivelException` e `BaseConhecimentoIndisponivelException`). Limites em `coti.conhecimento.busca` |
+| T039 | `POST /api/conhecimentos/diagnostico/busca` (`DiagnosticoBuscaController`), com `BuscaDiagnosticoRequest` e `BuscaDiagnosticoResponse` (`record`), chave administrativa, 400 e 503 pelo manipulador de exceções |
+| T040 | Servidor MCP (`spring-ai-starter-mcp-server-webmvc`, `STREAMABLE`, só a capacidade de ferramentas) e `BuscarConhecimentoTool` com as anotações de somente leitura; `ResultadoBusca`, `TrechoResultado`, `ErroFerramenta` e `ErroFerramentaException` |
+| T041 | Cadeia de segurança de `/mcp` com `Authorization: Bearer` (`BearerAuthFilter`) e nova variável `CONHECIMENTO_MCP_API_KEY`; a chave administrativa e a de monitoramento recebem 401 |
+| T042 | `BuscarConhecimentoToolContratoIT` (36 testes) com cliente MCP real em porta aleatória: `tools/list`, `tools/call`, argumentos inválidos, banco e embedding indisponíveis, tempo limite, erro inesperado, credencial |
+| T043 | `DiagnosticoIgualMcpIT` (6 testes): mesma pergunta, mesmos trechos, ordem e similaridades pelo diagnóstico e pelo MCP |
+
+#### Arquivos criados (em `api-conhecimento/src`)
+
+- `main`: `dominio/{TrechoEncontrado, LimitesBusca}`, `dominio/excecao/{ArgumentosInvalidosException, BaseConhecimentoIndisponivelException, ModeloIndisponivelException}`, `aplicacao/{BuscarConhecimentoService, ResultadoDaBusca}`, `aplicacao/porta/BuscaVetorialPort`, `infraestrutura/vetorial/PgVectorBuscaAdapter`, `infraestrutura/config/BuscaConfig`, `infraestrutura/seguranca/BearerAuthFilter`, `api/mcp/{BuscarConhecimentoTool, ResultadoBusca, TrechoResultado, ErroFerramenta, ErroFerramentaException}`, `api/rest/DiagnosticoBuscaController`, `api/rest/dto/{BuscaDiagnosticoRequest, BuscaDiagnosticoResponse}`
+- `test`: `aplicacao/{BuscarConhecimentoServiceTest, BuscaVetorialIT}`, `infraestrutura/vetorial/{ScoreCossenoIT, PgVectorBuscaAdapterTest}`, `infraestrutura/seguranca/SegurancaMcpIT`, `api/rest/DiagnosticoBuscaControllerTest`, `api/mcp/{BuscarConhecimentoToolTest, BuscarConhecimentoToolContratoIT, DiagnosticoIgualMcpIT}`, `suporte/{TrechosDeTeste, TesteServidor, ClienteMcpDeTeste}`
+
+#### Arquivos modificados
+
+- `api-conhecimento/pom.xml`: starter do servidor MCP
+- `application.yml`: `spring.ai.mcp.server.*`, `coti.conhecimento.busca.*`, `seguranca.mcp-api-key` e `hikari.connection-init-sql` com o scan iterativo do HNSW
+- `PropriedadesConhecimento` (`Busca` e `Seguranca.mcpApiKey`), `SecurityConfig` (cadeia `/mcp`, papel `SERVICO_ATENDIMENTO`), `ManipuladorExcecoesConhecimento` (400 e 503 da busca)
+- `docker-compose.yml` e `.env.example`: `CONHECIMENTO_MCP_API_KEY` na `api-conhecimento`
+- Testes: `TesteWeb`, `ChavesTeste`, `InicializacaoSemVariavelTest` (a nova chave), `AnalisadorConteudoRegexTest` e `LimiteTamanhoCorpoFilterTest` (construtor)
+- Docs: `05-tasks.md`, `04-plan.md` (§3, confirmações dos spikes T037 e do MCP Server), `03-architecture.md` (§7 e ADR-19, ADR-20), `06-api-contracts.md` (esclarecimentos, versão 1.0.0 revisada), `README.md`, skills `rag-pgvector`, `mcp-integration` e `testing`, e este arquivo
+
+#### Comandos executados e resultados
+
+| Comando | Resultado |
+|---|---|
+| `./mvnw -B clean verify` (raiz), 1ª execução completa | **FALHOU** (3 testes): `SegurancaMcpIT` não reiniciava o dublê de embeddings, e dois testes do `ScoreCossenoIT` perdiam resultados na suíte completa. Segunda causa investigada em "Decisões" |
+| `./mvnw -B clean verify` (raiz), final | **BUILD SUCCESS**: `api-conhecimento` **518 testes, 0 falhas, 1 ignorado** (eram 350); `api-atendimentos` 61 testes, 0 falhas, 1 ignorado |
+| `OPENAI_API_KEY=<falsa> CONHECIMENTO_MCP_API_KEY=<gerada> docker compose up -d --build postgres api-conhecimento` | Contêiner `healthy`; log: "PG VectorStore schema validation successful" com o papel só DML, "Registered tools: 1"; a subida com o `connection-init-sql` aplicado (se o SQL falhasse, o pool Hikari derrubaria a subida) |
+| `POST /mcp` sem credencial; com `X-Api-Key` | `401` e `401` |
+| `initialize` com Bearer, depois `notifications/initialized` e `tools/list` | `serverInfo` = `coti-conhecimento` 1.0.0; `202`; `tools/list` com `buscar_conhecimento`, título, descrição e schemas |
+| `docker compose down` | Stack derrubada |
+
+#### Testes automatizados (resumo)
+
+| Área | Cobertura |
+|---|---|
+| Spike T037 (12) | score = cosseno, faixa [0, 1], limiar inclusivo, `topK`, `gte` de vigência, filtro composto, valor com aspas, HNSW com 300 trechos não publicados, índice forçado com 400 linhas apagadas (com e sem scan iterativo), configuração da conexão |
+| `BuscarConhecimentoServiceTest` (35) | validação (nula, vazia, curta, longa, limites 3 e 1.000, `strip`), limite 0/11 e extremos, padrão 5, consulta com modelo, limiar e data, ordem, sem score, cortes 2.000 e 8.000 (inclusive 12.000 e soma exata), lista vazia, tempo limite com interrupção da tarefa, propagação de falhas, limites incoerentes |
+| `PgVectorBuscaAdapterTest` (11) | requisição (pergunta, `topK`, limiar), filtro com status, modelo e vigência, pergunta com aspas e operadores, conversão sem metadados internos, score acima de 1, 4 tipos de falha do provedor, falha do banco, metadado ausente |
+| `BuscaVetorialIT` (15, banco real) | não publicado, outro modelo e vencido nunca voltam; vigência inclusiva; limiar; ordem; limite e padrão; campos do contrato; cortes; documento cadastrado de verdade aparece pelo próprio texto; documento em revisão não é indexado; tempo limite; falha do provedor |
+| `DiagnosticoBuscaControllerTest` (22) | 401 (sem chave, errada, monitoramento), 400 (campos, tamanhos, limite, tipo, campo desconhecido, sem corpo), 415, 200 com todos os campos, ordem, sem campos internos, lista vazia, não publicados, pergunta ausente da resposta, 503 com `Retry-After` |
+| `SegurancaMcpIT` (19) | sem credencial, chave errada, administrativa e de monitoramento como Bearer, `X-Api-Key`, esquemas errados, `bearer` em minúsculas, outros métodos HTTP, subcaminhos, corpo do 401 sem chave, a chave de serviço não abre REST nem Actuator |
+| `BuscarConhecimentoToolContratoIT` (36, cliente MCP real) | servidor e capacidades, nome, título, descrição, anotações, `inputSchema` e `outputSchema`, as **divergências conhecidas** do schema, `structuredContent` e texto equivalentes, padrão 5, cortes, não publicados, argumentos inválidos (JSON `ErroFerramenta`), violação de schema do SDK, banco, embedding, tempo limite, erro interno sem detalhe, sessão que sobrevive a falha, ferramenta inexistente, credenciais |
+| `DiagnosticoIgualMcpIT` (6) | mesmo resultado para os limites de 1 a 10, lista vazia, corte de 8.000, outra pergunta com espaços |
+| `BuscarConhecimentoToolTest` (10) | delegação e conversão, códigos de erro, mensagem do JSON com causa vazia, anotações do método sem exceção checada |
+
+**Teste ignorado (1 por serviço):** a variante "ausente" de `OPENAI_API_KEY` no `InicializacaoSemVariavelTest`, porque a variável existe no ambiente deste computador.
+
+**Não executado:** `tools/call` e `POST` de diagnóstico na stack Docker, porque a busca gera o embedding da pergunta e enviaria texto à OpenAI; nesse caso as chaves do `.env` seriam necessárias. O caminho está coberto com o dublê do modelo e PostgreSQL real. Falta a prova com a OpenAI de verdade (T067).
+
+#### Decisões e desvios
+
+- **Risco do HNSW medido e mitigado (ADR-19).** Com o índice forçado e 400 linhas apagadas, a busca devolvia vazio mesmo havendo 3 trechos válidos, porque o índice guarda entradas mortas até o `VACUUM` e o filtro vem depois do scan. `hnsw.iterative_scan = strict_order` em toda conexão corrige o caso (0 → 3). Descartei `ALTER ROLE ... SET` (privilégio que o dono não tem) e `SET LOCAL` por busca (transação em volta de cada consulta). **Limite:** o HNSW continua aproximado; depois de muita remoção sem `VACUUM` o grafo degrada. Em produção o autovacuum cuida disso; o script de remoção de documentos deve rodar `VACUUM`. A nota de recuperação só sai do eval da Fase 8.
+- **Testes de busca zeram a tabela com `TRUNCATE` como dono** (`TrechosDeTeste.zerar()`), porque `DELETE` deixa entradas mortas e a busca aproximada passava a depender da ordem dos testes (foi o que quebrou a primeira suíte completa). O papel da aplicação continua sem `TRUNCATE`.
+- **Tempo limite de 5 s aplicado na aplicação, sobre a busca inteira** (embedding da pergunta mais consulta), em thread virtual com `Future.get(timeout)`; no estouro vira `MODELO_INDISPONIVEL` e a tarefa é interrompida. O embedding é o trecho lento; um banco lento também estouraria, e ainda assim é a resposta certa para quem espera.
+- **Texto de erro do MCP (desvio da forma esperada).** O Spring AI 2.0.1 monta `mensagem + quebra de linha + causa raiz`, então o JSON saía duplicado. `ErroFerramentaException` leva uma causa de mensagem vazia e o texto fica sendo o JSON mais uma quebra de linha. O contrato foi esclarecido (§4.5) e o teste de contrato trava o formato.
+- **Divergências do schema publicado.** `@McpToolParam` não gera `minLength`, `maxLength`, `minimum`, `maximum`, `default` nem `additionalProperties:false`, e o schema de saída não tem `maxItems` nem `maxLength` e não aceita `similaridade` nula. O contrato foi esclarecido (§4.2) e as validações estão no caso de uso. Tipo errado ou campo ausente é barrado pelo SDK com texto próprio (não é `ErroFerramenta`); o cliente da Fase 6 trata todo `isError` como falha.
+- **Bug achado pelo cliente real:** sem gravar o contexto de segurança na requisição, o redespacho assíncrono do SSE perdia a identidade e o log enchia de `AccessDenied ... response already committed`. O `BearerAuthFilter` agora usa `RequestAttributeSecurityContextRepository`; o log ficou limpo.
+- **Terceira credencial (ADR-20):** `CONHECIMENTO_MCP_API_KEY`, em cadeia própria. Descartei reaproveitar a chave administrativa e o módulo de segurança MCP da comunidade (dependência nova).
+- **Dependência nova:** `spring-ai-starter-mcp-server-webmvc`, do BOM do Spring AI 2.0.1, já prevista na arquitetura (§13 como definida pelo projeto) e no plano; traz o SDK `io.modelcontextprotocol.sdk:mcp` 2.0.0. Não conferi a licença nesta sessão; os dois são projetos do ecossistema Spring e do Model Context Protocol, e a licença deve ser confirmada no `pom` publicado antes da produção.
+- **`BuscarConhecimentoService`** é `final`, sem transação, e fecha o executor de threads virtuais ao parar (`AutoCloseable`).
+
+#### Pendências e riscos
+
+- **Variável nova no `.env`.** Foi criada `CONHECIMENTO_MCP_API_KEY` (já constava no `.env.example`, mas o Compose agora a exige). Eu não li nem alterei o seu `.env`: se a variável não estiver lá, `docker compose up` falha pedindo por ela. Gere um valor aleatório e coloque no `.env`.
+- **Limite de 10 requisições por minuto do diagnóstico (§3.5)** e o `429` ficam para a Fase 8 (T062).
+- **`UserDetailsServiceAutoConfiguration`:** continua imprimindo a senha gerada pelo Spring no log da subida (pendência da Fase 4, ainda aberta; sugestão: excluir a autoconfiguração na Fase 8).
+- **Sem prova com a OpenAI real**, nem de qualidade da recuperação: o limiar 0,70 e `k` = 5 são valores iniciais; o eval da Fase 8 decide.
+- **`VACUUM` após remoções:** o script administrativo de remoção de documentos ainda não existe (fora do MVP por API); quando existir, precisa rodar `VACUUM vector_store`.
+- **Licença** do starter MCP e do SDK a confirmar (ver decisões).
+- Itens antigos: allowlists de e-mail e telefone institucionais vazias, `Retry-After` em 429, scanner de segredos (T066), documentos reais (T067).
+
+#### Próxima fase
+
+**Fase 6 — MCP Client e API de Atendimentos** (T044–T053). A primeira tarefa é a **T044**, um spike do cliente MCP do Spring AI 2.0.1 na `api-atendimentos` (tipo injetável do `McpSyncClient`, cabeçalhos de credencial e de trace, comportamento com a `api-conhecimento` fora do ar na subida). A chave `CONHECIMENTO_MCP_API_KEY` precisará entrar também no serviço e no Compose da `api-atendimentos`.
 
 ---
 

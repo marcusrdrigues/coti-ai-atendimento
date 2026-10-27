@@ -22,10 +22,11 @@ class InicializacaoSemVariavelTest {
     private static final Map<String, String> OBRIGATORIAS = Map.of(
             "OPENAI_API_KEY", "valor-secreto-openai",
             "CONHECIMENTO_ADMIN_API_KEY", "valor-secreto-admin",
-            "MONITORAMENTO_API_KEY", "valor-secreto-monitoramento");
+            "MONITORAMENTO_API_KEY", "valor-secreto-monitoramento",
+            "CONHECIMENTO_MCP_API_KEY", "valor-secreto-mcp");
 
     @ParameterizedTest
-    @ValueSource(strings = {"OPENAI_API_KEY", "CONHECIMENTO_ADMIN_API_KEY", "MONITORAMENTO_API_KEY"})
+    @ValueSource(strings = {"OPENAI_API_KEY", "CONHECIMENTO_ADMIN_API_KEY", "MONITORAMENTO_API_KEY", "CONHECIMENTO_MCP_API_KEY"})
     void deveFalharCitandoAVariavelQuandoEstaEmBranco(String emBranco) {
         List<String> argumentos = argumentosBase();
         OBRIGATORIAS.forEach((nome, valor) -> argumentos.add("--" + nome + "=" + (nome.equals(emBranco) ? "" : valor)));
@@ -37,7 +38,7 @@ class InicializacaoSemVariavelTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"OPENAI_API_KEY", "CONHECIMENTO_ADMIN_API_KEY", "MONITORAMENTO_API_KEY"})
+    @ValueSource(strings = {"OPENAI_API_KEY", "CONHECIMENTO_ADMIN_API_KEY", "MONITORAMENTO_API_KEY", "CONHECIMENTO_MCP_API_KEY"})
     void deveFalharCitandoAVariavelQuandoEstaAusente(String ausente) {
         assumeThat(System.getenv(ausente)).as("variável definida no ambiente do SO").isNull();
         List<String> argumentos = argumentosBase();

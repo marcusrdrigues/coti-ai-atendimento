@@ -3,13 +3,17 @@ package br.com.coti.conhecimento.api.rest;
 import br.com.coti.conhecimento.api.erro.CodigoErro;
 import br.com.coti.conhecimento.api.erro.ErroCampo;
 import br.com.coti.conhecimento.api.erro.ProblemaFactory;
+import br.com.coti.conhecimento.dominio.excecao.ArgumentosInvalidosException;
+import br.com.coti.conhecimento.dominio.excecao.BaseConhecimentoIndisponivelException;
 import br.com.coti.conhecimento.dominio.excecao.ConhecimentoDuplicadoException;
 import br.com.coti.conhecimento.dominio.excecao.ConhecimentoNaoEncontradoException;
 import br.com.coti.conhecimento.dominio.excecao.DadoPessoalDetectadoException;
 import br.com.coti.conhecimento.dominio.excecao.DadosInvalidosException;
 import br.com.coti.conhecimento.dominio.excecao.DocumentoGrandeDemaisException;
 import br.com.coti.conhecimento.dominio.excecao.IndexacaoFalhouException;
+import br.com.coti.conhecimento.dominio.excecao.ModeloIndisponivelException;
 import jakarta.servlet.http.HttpServletRequest;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.Ordered;
@@ -70,6 +74,28 @@ public class ManipuladorExcecoesConhecimento {
         ProblemDetail problema = ProblemaFactory.criar(codigo, request);
         problema.setProperty("conhecimentoId", ex.conhecimentoId().toString());
         return resposta(codigo, request, problema);
+    }
+
+    @ExceptionHandler(ArgumentosInvalidosException.class)
+    public ResponseEntity<ProblemDetail> argumentosInvalidos(ArgumentosInvalidosException ex,
+                                                             HttpServletRequest request) {
+        return resposta(CodigoErro.DADOS_INVALIDOS, request, ProblemaFactory.criar(CodigoErro.DADOS_INVALIDOS, request,
+                List.of(new ErroCampo(ex.campo(), ex.getMessage()))));
+    }
+
+    @ExceptionHandler(ModeloIndisponivelException.class)
+    public ResponseEntity<ProblemDetail> modeloIndisponivel(ModeloIndisponivelException ex, HttpServletRequest request) {
+        log.error("Embedding da pergunta indisponível.", ex);
+        return resposta(CodigoErro.MODELO_INDISPONIVEL, request, ProblemaFactory.criar(
+                CodigoErro.MODELO_INDISPONIVEL, request));
+    }
+
+    @ExceptionHandler(BaseConhecimentoIndisponivelException.class)
+    public ResponseEntity<ProblemDetail> baseIndisponivel(BaseConhecimentoIndisponivelException ex,
+                                                          HttpServletRequest request) {
+        log.error("Base de conhecimento indisponível na busca.", ex);
+        return resposta(CodigoErro.BASE_CONHECIMENTO_INDISPONIVEL, request, ProblemaFactory.criar(
+                CodigoErro.BASE_CONHECIMENTO_INDISPONIVEL, request));
     }
 
     @ExceptionHandler({DataAccessResourceFailureException.class, TransientDataAccessException.class})

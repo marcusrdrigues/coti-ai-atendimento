@@ -66,6 +66,9 @@ Esta skill garante o Artigo 15 e dá evidência aos Artigos 3 a 13 e 16 a 17.
 - Container reutilizado por classe (`static` com `@Container`) ou por suíte, para tempo de execução aceitável.
 - As migrações reais rodam no teste; `initialize-schema: false` igual à produção.
 - `EmbeddingModel` substituído por um dublê determinístico (vetores fixos por texto, na dimensão configurada) via `@TestConfiguration`.
+- Teste de **busca vetorial** começa com `TRUNCATE vector_store` feito pelo papel dono (`TrechosDeTeste.zerar()`), não com `DELETE`: o `DELETE` deixa entradas mortas no grafo do HNSW até o `VACUUM` e a busca aproximada passa a depender da ordem dos testes. O papel da aplicação não tem `TRUNCATE`, de propósito. Para exercitar o índice em tabela pequena, force-o com `SET LOCAL enable_seqscan = off` dentro de uma transação.
+- Para dar cosseno exato entre a pergunta e o trecho, grave o vetor direto (`TrechosDeTeste.gravar`) em vez de depender do texto: o limiar, a ordem e o filtro ficam testáveis sem modelo real.
+- Teste de contrato MCP usa cliente real (`ClienteMcpDeTeste`) contra `@TesteServidor` (porta aleatória); `MockMvc` não serve para o Streamable HTTP assíncrono.
 - Pré-requisito: Docker Desktop ativo. Antes de rodar, `docker info`. Se o Docker estiver parado, informe; não desabilite o teste.
 
 ### 4. Testes HTTP

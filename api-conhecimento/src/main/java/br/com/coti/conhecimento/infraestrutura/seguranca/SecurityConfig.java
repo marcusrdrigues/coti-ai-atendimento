@@ -18,9 +18,9 @@ import org.springframework.security.web.authentication.AnonymousAuthenticationFi
  * <ul>
  *   <li>{@code /actuator/**} e documentação: chave de monitoramento (health e info públicos);</li>
  *   <li>{@code /api/**}: chave administrativa, papel GESTOR;</li>
+ *   <li>{@code /mcp}: chave de serviço (Bearer), papel SERVICO_ATENDIMENTO;</li>
  *   <li>qualquer outra rota: exige autenticação, que nenhuma credencial satisfaz (401).</li>
  * </ul>
- * A cadeia de {@code /mcp/**}, com a chave de serviço, entra na Fase 5.
  */
 @Configuration
 @EnableWebSecurity
@@ -28,6 +28,7 @@ public class SecurityConfig {
 
     static final String PAPEL_GESTOR = "GESTOR";
     static final String PAPEL_MONITORAMENTO = "MONITORAMENTO";
+    static final String PAPEL_SERVICO_ATENDIMENTO = "SERVICO_ATENDIMENTO";
 
     @Bean
     @Order(1)
@@ -64,8 +65,27 @@ public class SecurityConfig {
                 .build();
     }
 
+    /**
+     * Ferramenta MCP: somente a chave de serviço da {@code api-atendimentos}, em {@code Authorization: Bearer}.
+     * Sem credencial, com chave errada ou com a chave administrativa a resposta é 401, antes do protocolo MCP.
+     */
     @Bean
     @Order(3)
+    SecurityFilterChain cadeiaMcp(HttpSecurity http, PropriedadesConhecimento propriedades,
+                                  RespostaSegurancaProblema resposta) throws Exception {
+        http.securityMatcher("/mcp", "/mcp/**");
+        http.authorizeHttpRequests(a -> {
+            a.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll();
+            a.anyRequest().hasRole(PAPEL_SERVICO_ATENDIMENTO);
+        });
+        return comBase(http, resposta)
+                .addFilterBefore(new BearerAuthFilter(propriedades.seguranca().mcpApiKey(),
+                        "api-atendimentos", PAPEL_SERVICO_ATENDIMENTO), AnonymousAuthenticationFilter.class)
+                .build();
+    }
+
+    @Bean
+    @Order(4)
     SecurityFilterChain cadeiaPadrao(HttpSecurity http, RespostaSegurancaProblema resposta) throws Exception {
         http.authorizeHttpRequests(a -> {
             a.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll();

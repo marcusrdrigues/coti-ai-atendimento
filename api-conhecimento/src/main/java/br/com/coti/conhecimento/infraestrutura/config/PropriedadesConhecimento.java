@@ -1,7 +1,10 @@
 package br.com.coti.conhecimento.infraestrutura.config;
 
 import br.com.coti.conhecimento.dominio.ConfiguracaoDivisao;
+import br.com.coti.conhecimento.dominio.LimitesBusca;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -28,6 +31,7 @@ public record PropriedadesConhecimento(
         @Valid @NotNull Analise analise,
         @Valid @DefaultValue Divisao divisao,
         @Valid @DefaultValue Embeddings embeddings,
+        @Valid @DefaultValue Busca busca,
         @DefaultValue("false") boolean documentacaoPublica) {
 
     /**
@@ -42,11 +46,14 @@ public record PropriedadesConhecimento(
             String adminApiKey,
             @NotBlank(message = "defina a variável de ambiente MONITORAMENTO_API_KEY")
             @Pattern(regexp = SEM_PLACEHOLDER, message = "defina a variável de ambiente MONITORAMENTO_API_KEY")
-            String monitoramentoApiKey) {
+            String monitoramentoApiKey,
+            @NotBlank(message = "defina a variável de ambiente CONHECIMENTO_MCP_API_KEY")
+            @Pattern(regexp = SEM_PLACEHOLDER, message = "defina a variável de ambiente CONHECIMENTO_MCP_API_KEY")
+            String mcpApiKey) {
 
         @Override
         public String toString() {
-            return "Seguranca[adminApiKey=***, monitoramentoApiKey=***]";
+            return "Seguranca[adminApiKey=***, monitoramentoApiKey=***, mcpApiKey=***]";
         }
     }
 
@@ -89,6 +96,26 @@ public record PropriedadesConhecimento(
             @Positive @DefaultValue("2") double multiplicador,
             @DefaultValue("2s") Duration atrasoMaximo,
             @DefaultValue("100ms") Duration jitter) {
+    }
+
+    /**
+     * Busca semântica (RF04). O limiar 0,70 é inicial e deve ser confirmado pelo eval de recuperação (Fase 8);
+     * a coerência entre os valores é checada ao criar {@link LimitesBusca}.
+     */
+    public record Busca(
+            @Positive @DefaultValue("3") int perguntaMinima,
+            @Positive @DefaultValue("1000") int perguntaMaxima,
+            @Positive @DefaultValue("5") int limitePadrao,
+            @Positive @DefaultValue("10") int limiteMaximo,
+            @DecimalMin("0.0") @DecimalMax("1.0") @DefaultValue("0.70") double limiarSimilaridade,
+            @Positive @DefaultValue("2000") int textoMaximoPorTrecho,
+            @Positive @DefaultValue("8000") int textoMaximoTotal,
+            @DefaultValue("5s") Duration tempoLimite) {
+
+        public LimitesBusca paraDominio() {
+            return new LimitesBusca(perguntaMinima, perguntaMaxima, limitePadrao, limiteMaximo, limiarSimilaridade,
+                    textoMaximoPorTrecho, textoMaximoTotal, tempoLimite);
+        }
     }
 
     /**

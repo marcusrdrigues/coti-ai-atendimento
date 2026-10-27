@@ -23,12 +23,29 @@ spring:
     password: ${CONHECIMENTO_DB_PASSWORD}
     hikari:
       connection-timeout: 3000 # milissegundos; RNF04: PostgreSQL com tempo limite de 3 s
+      # pgvector 0.8: o filtro e o limiar da busca são aplicados depois do scan do índice HNSW (ef_search = 40) e o
+      # índice guarda linhas apagadas até o VACUUM; sem o scan iterativo a busca devolvia menos que o pedido, ou
+      # nada (ScoreCossenoIT). strict_order mantém a ordem exata por distância.
+      connection-init-sql: SET hnsw.iterative_scan = strict_order
   flyway:
     user: ${CONHECIMENTO_FLYWAY_USER} # papel dono do schema, usado só nas migrações
     password: ${CONHECIMENTO_FLYWAY_PASSWORD}
   ai:
     model:
       chat: none # este serviço só usa embeddings
+    mcp:
+      server:
+        name: coti-conhecimento
+        version: 1.0.0 # acompanha a versão do contrato (specs/06-api-contracts.md §4.1)
+        protocol: STREAMABLE # o SSE está depreciado
+        type: SYNC
+        capabilities: # só a ferramenta de busca é publicada
+          tool: true
+          resource: false
+          prompt: false
+          completion: false
+        streamable-http:
+          mcp-endpoint: /mcp
     openai:
       api-key: ${OPENAI_API_KEY}
       timeout: ${OPENAI_TIMEOUT:30s}
@@ -50,6 +67,7 @@ coti:
     seguranca:
       admin-api-key: ${CONHECIMENTO_ADMIN_API_KEY}
       monitoramento-api-key: ${MONITORAMENTO_API_KEY}
+      mcp-api-key: ${CONHECIMENTO_MCP_API_KEY} # chave de serviço da api-atendimentos para /mcp (Bearer)
     openai:
       api-key: ${OPENAI_API_KEY} # só validação de presença; o Spring AI lê spring.ai.openai.api-key
     web:
@@ -69,6 +87,15 @@ coti:
       multiplicador: 2
       atraso-maximo: 2s
       jitter: 100ms
+    busca: # RF04; o limiar é inicial e será confirmado pelo eval de recuperação
+      pergunta-minima: 3
+      pergunta-maxima: 1000
+      limite-padrao: 5
+      limite-maximo: 10
+      limiar-similaridade: 0.70
+      texto-maximo-por-trecho: 2000
+      texto-maximo-total: 8000
+      tempo-limite: 5s # inclui o embedding da pergunta (RNF04)
     analise:
       # Padrões de prompt injection (regex, sem diferenciar maiúsculas). Documento que casar fica EM_REVISAO.
       padroes-injecao:

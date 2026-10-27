@@ -20,7 +20,8 @@ import org.springframework.test.context.ContextConfiguration;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK, properties = {
         "OPENAI_API_KEY=" + ChavesTeste.OPENAI,
         "CONHECIMENTO_ADMIN_API_KEY=" + ChavesTeste.ADMIN,
-        "MONITORAMENTO_API_KEY=" + ChavesTeste.MONITORAMENTO
+        "MONITORAMENTO_API_KEY=" + ChavesTeste.MONITORAMENTO,
+        "CONHECIMENTO_MCP_API_KEY=" + ChavesTeste.MCP
 })
 @ContextConfiguration(initializers = PostgresContainerConfig.class)
 @Import(EmbeddingFalsoConfig.class)

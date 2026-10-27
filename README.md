@@ -7,7 +7,7 @@ Plataforma de atendimento inteligente para alunos da COTI Informática, formada 
 
 A especificação completa está em [`specs/`](specs/) (constituição, requisitos, arquitetura, plano, tarefas e contratos). Agentes de codificação seguem o [`AGENTS.md`](AGENTS.md).
 
-> Estado atual: Fases 1 a 4 concluídas (banco em Docker, os dois serviços com segurança, erros padronizados, Actuator e OpenAPI, e na `api-conhecimento` o cadastro com divisão em trechos, embeddings e publicação sem estado parcial, mais a consulta). Um cadastro sem pendências agora chama a OpenAI de verdade (`text-embedding-3-small`); sem uma `OPENAI_API_KEY` válida ele termina em `503 MODELO_INDISPONIVEL`. A busca vetorial e o MCP chegam na Fase 5; acompanhe em [`specs/05-tasks.md`](specs/05-tasks.md).
+> Estado atual: Fases 1 a 5 concluídas (banco em Docker, os dois serviços com segurança, erros padronizados, Actuator e OpenAPI, e na `api-conhecimento` o cadastro com divisão em trechos, embeddings e publicação sem estado parcial, mais a consulta, a busca semântica, a ferramenta MCP `buscar_conhecimento` e o diagnóstico da busca). Cadastro e busca chamam a OpenAI de verdade (`text-embedding-3-small`); sem uma `OPENAI_API_KEY` válida terminam em `503 MODELO_INDISPONIVEL`. O cliente MCP e a API de atendimento chegam na Fase 6; acompanhe em [`specs/05-tasks.md`](specs/05-tasks.md).
 
 ## Ambiente local
 
@@ -41,6 +41,7 @@ Para subir as APIs (Fase 2) preencha também:
 | `OPENAI_CHAT_MODEL` | Identificador do modelo de chat, com versão (`api-atendimentos`); será definido pelo eval (T070) |
 | `CONHECIMENTO_ADMIN_API_KEY` | Chave administrativa (`X-Api-Key`) da `api-conhecimento` |
 | `MONITORAMENTO_API_KEY` | Chave (`X-Api-Key`) para métricas e detalhes do health |
+| `CONHECIMENTO_MCP_API_KEY` | Chave de serviço (`Authorization: Bearer`) com que a `api-atendimentos` chama a ferramenta MCP da `api-conhecimento`; a chave administrativa não vale em `/mcp` |
 
 Variável definida no shell tem precedência sobre o `.env` no Docker Compose; confira com `echo` se não quiser que uma chave do seu ambiente seja repassada aos contêineres.
 

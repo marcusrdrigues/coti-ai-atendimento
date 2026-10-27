@@ -72,7 +72,36 @@ Cada item foi comprovado por teste contra PostgreSQL real, versionado em `PgVect
 | Lotes grandes | O `BatchingStrategy` do Spring AI quebra um `add()` grande em várias chamadas ao provedor por limite de tokens |
 | Novas tentativas | O Spring Framework 7 traz `org.springframework.core.retry.RetryTemplate` (sem dependência extra). Decisão: `max-retries: 0` no SDK da OpenAI e a política fica no código (`PoliticaNovasTentativas`), só para falha transitória (429, 5xx, 408, erro de E/S), com backoff exponencial e variação aleatória. Descartada a dependência `spring-retry`: o recurso já está no framework |
 
-Ainda a conferir em tarefas posteriores (spikes T037, T044, T061): detalhes de API do Spring AI listados em `03-architecture.md` §15.
+### Confirmações do spike T037 (Spring AI 2.0.1 e pgvector 0.8.7, concluído em 2026-10-27)
+
+Comprovadas em `ScoreCossenoIT`, com trechos de cosseno exato em relação à pergunta e PostgreSQL real.
+
+| Pergunta | Resultado |
+|---|---|
+| `Document.getScore()` com `COSINE_DISTANCE` | É a **similaridade de cosseno** (`1 - distância`), igual ao cosseno construído (0,95 → 0,95; 1,0 para a pergunta idêntica). Não é a distância |
+| Faixa do score | Sem limiar explícito vale o padrão **0** (`SIMILARITY_THRESHOLD_ACCEPT_ALL`): cosseno negativo nunca volta, então o score devolvido fica em [0, 1], como o contrato exige. O score pode passar de 1 por arredondamento de ponto flutuante; o adaptador limita a 1 |
+| `similarityThreshold` | Inclusivo (`score >= limiar`). 0,70 corta 0,65 e mantém 0,75 |
+| `gte` sobre inteiro no filtro | Funciona: `vigenteAte >= 20261027` mantém `99991231` (sem vigência) e a data de hoje, e exclui ontem. Composto com `status` e `modeloEmbedding` filtra dentro da consulta |
+| Valor com aspas no filtro | Vira constante da expressão; não altera a consulta |
+| **HNSW com filtro, limiar e linhas apagadas** | **Risco confirmado.** O índice guarda entradas de linhas apagadas até o `VACUUM` e o filtro e o limiar são aplicados depois do scan do índice (`ef_search` 40). Com o índice forçado (`enable_seqscan = off`) e 400 linhas apagadas, a busca voltou **vazia** com 3 trechos válidos. Com `hnsw.iterative_scan` em `relaxed_order` ou `strict_order` voltaram os 3 |
+| Decisão | Toda conexão da aplicação roda `SET hnsw.iterative_scan = strict_order` (`spring.datasource.hikari.connection-init-sql`; `strict_order` mantém a ordem exata). Descartado: `ALTER ROLE ... SET`, que exige privilégio que o papel dono não tem, e `SET LOCAL` em cada busca, que exigiria transação em torno de cada consulta |
+| Limite do achado | O scan iterativo reduz a perda, mas o HNSW é aproximado: depois de muita inserção e remoção sem `VACUUM` o grafo degrada. Em produção o autovacuum cuida disso; o script de remoção de documentos deve rodar `VACUUM` ao final. A nota de recuperação só sai do eval da Fase 8 |
+
+Ainda a conferir em tarefas posteriores (spikes T044 e T061): detalhes de API do Spring AI listados em `03-architecture.md` §15.
+
+### Confirmações do MCP Server (T040–T042, Spring AI 2.0.1 e MCP Java SDK 2.0.0, 2026-10-27)
+
+| Pergunta | Resultado |
+|---|---|
+| Artefatos e pacotes | `spring-ai-starter-mcp-server-webmvc` traz `spring-ai-mcp-annotations` (`org.springframework.ai.mcp.annotation.McpTool`, `McpToolParam`) e o SDK `io.modelcontextprotocol.sdk:mcp` 2.0.0 (cliente em `io.modelcontextprotocol.client.*`, esquemas em `io.modelcontextprotocol.spec.McpSchema`) |
+| Propriedades | `spring.ai.mcp.server.{name,version,protocol,type,capabilities.*}` e `spring.ai.mcp.server.streamable-http.mcp-endpoint` (padrão `/mcp`) |
+| `@McpTool.McpAnnotations` | Aceita `readOnlyHint`, `destructiveHint`, `idempotentHint` e `openWorldHint`; os quatro saem em `tools/list` como no contrato |
+| `@McpToolParam` | Só tem `description` e `required`. **Não** gera `minLength`, `maxLength`, `minimum`, `maximum`, `default` nem `additionalProperties: false` no `inputSchema`; `limite` sai com `format: int32` |
+| `outputSchema` gerado | Tem `trechos`, `total` e os campos do contrato, com `format: uuid` e `enum` da categoria. Sem `maxItems`, `maxLength`, `minimum`, `maximum`; `similaridade` é `number` (não aceita `null`) e, com `@JsonProperty(required = false)`, deixa de ser obrigatória |
+| Exceção em `@McpTool` | `RuntimeException` vira `CallToolResult` com `isError = true`. O texto é **`mensagem + quebra de linha + mensagem da causa raiz`**; sem causa, o JSON saía duplicado. `ErroFerramentaException` leva uma causa de mensagem vazia e o texto fica sendo o JSON do `ErroFerramenta` mais uma quebra de linha |
+| Validação do SDK | O servidor valida os argumentos contra o `inputSchema` antes do método: tipo errado ou `pergunta` ausente dá `isError = true` com texto do SDK (sem o valor recebido), **não** o JSON `ErroFerramenta`. Argumento desconhecido é ignorado |
+| Cliente de teste | `HttpClientStreamableHttpTransport.builder(url).endpoint("/mcp").requestBuilder(HttpRequest.newBuilder().header("Authorization", "Bearer ...")).build()` e `McpClient.sync(transporte)...build()` + `initialize()` |
+| Segurança assíncrona | A resposta MCP é assíncrona (SSE) e o redespacho é autorizado de novo. O filtro Bearer precisa gravar o contexto na requisição (`RequestAttributeSecurityContextRepository`); sem isso o log enchia de `AccessDenied ... response already committed` |
 
 ---
 

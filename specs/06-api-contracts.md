@@ -411,6 +411,8 @@ Requisitos: RF04 e RF05.
 
 O schema é gerado pelo Spring AI a partir do `record` de retorno (`generateOutputSchema = true`). O teste de contrato compara o schema publicado com este.
 
+**Diferenças do schema publicado (Spring AI 2.0.1, verificadas em `BuscarConhecimentoToolContratoIT`).** Os schemas acima são o contrato lógico; o que o servidor publica em `tools/list` tem tipo, descrição, `format` (`uuid`, `int32`, `double`), `enum` da categoria e `required` iguais, mas **não** traz as restrições que a anotação `@McpToolParam` e o gerador não sabem expressar: `minLength`, `maxLength`, `minimum`, `maximum`, `default`, `maxItems` e `additionalProperties: false`; `similaridade` é `number` (não `["number","null"]`) e não é obrigatória. As regras valem no servidor, independentemente do schema (§4.3): `pergunta` de 3 a 1.000 caracteres, `limite` de 1 a 10 (padrão 5), no máximo 10 trechos, texto de até 2.000 caracteres. Argumento desconhecido é ignorado.
+
 ### 4.3 Regras da ferramenta
 
 - `pergunta` e `limite` são validados **no servidor**, independentemente do schema: `pergunta` sem espaços nas pontas, 3 a 1.000 caracteres; `limite` ausente vira 5; fora de 1 a 10 é erro.
@@ -497,6 +499,8 @@ Resposta de sucesso:
 ```
 
 - `mensagem` é segura: sem SQL, stack trace, nome de classe ou valor recebido.
+- O `content[0].text` é o JSON `ErroFerramenta` seguido de uma quebra de linha (o Spring AI 2.0.1 acrescenta a mensagem da causa, que é vazia de propósito). Quem consome deve fazer `strip()` antes de interpretar.
+- **Violação do schema.** Tipo errado (`limite` como texto) ou `pergunta` ausente é recusado pelo SDK antes da ferramenta: `isError = true`, sem o valor recebido, mas o texto é uma mensagem do SDK, **não** o JSON `ErroFerramenta`. Quem consome trata todo `isError = true` como falha e só interpreta o `codigo` quando o texto for um JSON `ErroFerramenta`. Valores fora da faixa (`limite` 0 ou 11, `pergunta` curta ou longa) chegam à ferramenta e devolvem `ARGUMENTOS_INVALIDOS` normalmente.
 - Implementação: erros são `RuntimeException` de domínio lançadas pelo método `@McpTool`, que o Spring AI 2.0.1 converte em `isError = true` (ver skill `mcp-integration`).
 
 ---
@@ -753,3 +757,4 @@ Regras:
 | Versão | Data | Mudança |
 |---|---|---|
 | 1.0.0 | 2026-10-22 | Versão inicial |
+| 1.0.0 (revisão) | 2026-10-27 | Esclarecimentos da Fase 5, sem mudar campos, códigos nem a versão do servidor MCP (`1.0.0`): diferenças do schema publicado pelo `@McpTool` (§4.2), forma do texto de erro e erro de schema do SDK (§4.5). O limite de 10 requisições por minuto do diagnóstico (§3.5) continua para a Fase 8 |

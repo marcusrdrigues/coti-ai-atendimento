@@ -37,13 +37,14 @@ class AnalisadorConteudoRegexTest {
 
     private static AnalisadorConteudoRegex criar(List<String> dominiosEmail, List<String> telefones) {
         return new AnalisadorConteudoRegex(new PropriedadesConhecimento(
-                new PropriedadesConhecimento.Seguranca("a", "b"),
+                new PropriedadesConhecimento.Seguranca("a", "b", "m"),
                 new PropriedadesConhecimento.OpenAi("c"),
                 new PropriedadesConhecimento.Web(1000),
                 new PropriedadesConhecimento.Embedding("modelo"),
                 new PropriedadesConhecimento.Analise(PADROES_REAIS, dominiosEmail, telefones),
                 new PropriedadesConhecimento.Divisao(1500, 200, 50, 500),
                 new PropriedadesConhecimento.Embeddings(100, 2, java.time.Duration.ofMillis(1), 2, java.time.Duration.ofMillis(5), java.time.Duration.ZERO),
+                new PropriedadesConhecimento.Busca(3, 1000, 5, 10, 0.70, 2000, 8000, java.time.Duration.ofSeconds(5)),
                 false));
     }
 

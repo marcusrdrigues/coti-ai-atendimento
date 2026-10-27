@@ -18,13 +18,14 @@ class LimiteTamanhoCorpoFilterTest {
 
     private final LimiteTamanhoCorpoFilter filtro = new LimiteTamanhoCorpoFilter(
             new PropriedadesConhecimento(
-                    new PropriedadesConhecimento.Seguranca("a", "b"),
+                    new PropriedadesConhecimento.Seguranca("a", "b", "m"),
                     new PropriedadesConhecimento.OpenAi("c"),
                     new PropriedadesConhecimento.Web(LIMITE),
                     new PropriedadesConhecimento.Embedding("modelo-de-teste"),
                     new PropriedadesConhecimento.Analise(java.util.List.of("x"), java.util.List.of(), java.util.List.of()),
                     new PropriedadesConhecimento.Divisao(1500, 200, 50, 500),
                     new PropriedadesConhecimento.Embeddings(100, 2, java.time.Duration.ofMillis(1), 2, java.time.Duration.ofMillis(5), java.time.Duration.ZERO),
+                new PropriedadesConhecimento.Busca(3, 1000, 5, 10, 0.70, 2000, 8000, java.time.Duration.ofSeconds(5)),
                     false),
             new EscritorProblema(JsonMapper.builder().build()));
 

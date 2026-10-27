@@ -163,7 +163,7 @@ Medir em caracteres é a escolha simples do MVP; o teto de tokens por chamada é
 - **Atomicidade (ADR-07 de `specs/03-architecture.md`)**:
   1. o documento é gravado como `PROCESSANDO`;
   2. os lotes são gravados com metadado `status = "PROCESSANDO"`, invisíveis para a busca;
-  3. com todos os lotes gravados, **uma transação curta** muda o metadado dos chunks para `PUBLICADO` (`jsonb_set` sobre `metadata`; **conferir** o tipo da coluna) e o documento para `PUBLICADO`;
+  3. com todos os lotes gravados, **uma transação curta** muda o metadado dos chunks para `PUBLICADO` (`jsonb_set` sobre `metadata`; coluna `json`, conferido no spike T031) e o documento para `PUBLICADO`;
   4. em falha, os chunks do documento são apagados por filtro `documentoId` e o documento fica `ERRO_PROCESSAMENTO`.
 - Assim as chamadas à OpenAI ficam fora de transação de banco. Descartados: transação envolvendo todos os `add(...)` (fica aberta durante as chamadas à OpenAI) e junção com `documento` na busca (o filtro do `PgVectorStore` não faz junção).
 - Uma rotina na subida limpa documentos `PROCESSANDO` há mais de 10 minutos e seus chunks.
@@ -172,7 +172,7 @@ Medir em caracteres é a escolha simples do MVP; o teto de tokens por chamada é
 
 ```java
 // Ilustração do formato, não é código da aplicação
-var b = new FilterExpressionBuilder();               // (conferir pacote) org.springframework.ai.vectorstore.filter
+var b = new FilterExpressionBuilder();               // org.springframework.ai.vectorstore.filter (conferido)
 var filtro = b.and(
         b.and(b.eq("status", "PUBLICADO"), b.eq("modeloEmbedding", modeloAtual)),
         b.gte("vigenteAte", hojeAAAAMMDD))   // inteiro; 99991231 = sem vigência (ADR-08)
@@ -191,8 +191,9 @@ List<Document> resultados = vectorStore.similaritySearch(requisicao);
 - Filtro de publicação, modelo e vigência **dentro** da busca (`filterExpression`), nunca em `stream().filter(...)` depois (RN04.2).
 - A vigência é comparada como inteiro `AAAAMMDD` para evitar `isNull` e comparação de datas em JSONPath (ADR-08). O teste de integração prova que conteúdo vencido não volta.
 - Monte o filtro com o builder de expressões ou valores fixos do código. **Nunca** concatene texto vindo da requisição em uma expressão de filtro em string.
+- **Scan iterativo do HNSW.** O filtro e o limiar são aplicados depois do scan do índice (`ef_search` 40) e o índice guarda linhas apagadas até o `VACUUM`. Sem `hnsw.iterative_scan`, a busca pode voltar vazia (medido em `ScoreCossenoIT`). A conexão da aplicação roda `SET hnsw.iterative_scan = strict_order` por `hikari.connection-init-sql`. Depois de remover muitos trechos, rode `VACUUM vector_store`.
 - Ordene por similaridade decrescente; limite cada `texto` a 2.000 caracteres e a soma dos textos a 8.000 caracteres, removendo inteiros os de menor similaridade.
-- Converta cada `Document` em `TrechoConhecimento(id, texto, documentoId, titulo, fonte, categoria, similaridade)`, que vira o `ResultadoBusca` (`trechos`, `total`) do contrato. `similaridade` vem de `Document.getScore()`; **conferir** como a 2.0 calcula o score para `COSINE_DISTANCE` (similaridade de 0 a 1) antes de fixar o limiar. Se o score vier nulo, `similaridade` é `null` e a ordem da busca é mantida.
+- Converta cada `Document` em `TrechoConhecimento(id, texto, documentoId, titulo, fonte, categoria, similaridade)`, que vira o `ResultadoBusca` (`trechos`, `total`) do contrato. `similaridade` vem de `Document.getScore()`, que para `COSINE_DISTANCE` é o cosseno (`1 - distância`); o limiar padrão do Spring AI é 0, então o score devolvido fica em [0, 1] (spike T037; limite em 1 por arredondamento). Se o score vier nulo, `similaridade` é `null` e a ordem da busca é mantida.
 - `ordem`, `status`, `modeloEmbedding`, `vigenteAte` e `cadastradoEm` são metadados internos do chunk: usados no filtro e na auditoria, **nunca** devolvidos na saída.
 
 ### 7. Relevância e prevenção de resposta sem evidência
@@ -211,7 +212,7 @@ List<Document> resultados = vectorStore.similaritySearch(requisicao);
 ### 9. Reindexação e remoção (fora do MVP por API)
 
 - Remoção e edição de documento por API estão fora do MVP (recomendadas como RF13). No MVP, são feitas por script administrativo versionado no repositório.
-- O script de remoção apaga os chunks pelo filtro `documentoId == X` (`vectorStore.delete(Filter.Expression)`; **conferir** assinatura) e o registro em `documento`, na mesma operação.
+- O script de remoção apaga os chunks pelo filtro `documentoId == X` (`vectorStore.delete(Filter.Expression)`; assinatura conferida no spike T031) e o registro em `documento`, na mesma operação.
 - Reindexação (troca de modelo de embedding): reprocessa todos os documentos `PUBLICADO` a partir do texto guardado em `documento`, em tabela nova ou com janela de manutenção; nunca mistura modelos no mesmo índice.
 - Documento `EM_REVISAO` corrigido é recadastrado; o registro antigo é removido pelo script.
 

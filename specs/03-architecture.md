@@ -496,10 +496,10 @@ Um único caso de uso, `BuscarConhecimentoService`, atende a ferramenta MCP e o 
    - `status == 'PUBLICADO'`
    - `modeloEmbedding == '<modelo configurado>'`
    - `vigenteAte >= <hoje como AAAAMMDD>`
-4. Converte `Document` → `TrechoEncontrado(id, texto, documentoId, titulo, fonte, categoria, similaridade)`; `similaridade = Document.getScore()` **(conferir** que, para `COSINE_DISTANCE`, o score já é `1 - distância`).
+4. Converte `Document` → `TrechoEncontrado(id, texto, documentoId, titulo, fonte, categoria, similaridade)`; `similaridade = Document.getScore()`, que para `COSINE_DISTANCE` é o cosseno (`1 - distância`), limitado a [0, 1] (spike T037).
 5. Ordena, corta cada texto em 2.000 e o total em 8.000 caracteres.
 
-O filtro é traduzido pelo Spring AI para JSONPath do PostgreSQL. Com filtro e índice HNSW, o pgvector pode devolver menos que `k` resultados quando muitos vizinhos são filtrados; o pgvector 0.8 oferece varredura iterativa (`hnsw.iterative_scan`) para isso **(conferir** e medir no eval de recuperação antes de ligar).
+O filtro é traduzido pelo Spring AI para JSONPath do PostgreSQL. Com filtro e índice HNSW, o pgvector pode devolver menos que `k` resultados quando muitos vizinhos são filtrados; o pgvector 0.8 oferece varredura iterativa (`hnsw.iterative_scan`). O spike T037 mediu o risco (índice forçado e 400 linhas apagadas: busca vazia sem o recurso, completa com ele) e a conexão da aplicação roda `SET hnsw.iterative_scan = strict_order` (ADR-19). O eval de recuperação da Fase 8 mede a nota final.
 
 ---
 
@@ -713,6 +713,8 @@ Nenhum destes itens é exigido para rodar localmente, mas **todos** são obrigat
 | ADR-16 | Erros com `ProblemDetail` nativo do Spring + extensões do contrato | Envelope próprio: reinventa a RFC 9457 que o Spring já implementa |
 | ADR-17 | Health agregado `DEGRADADO` (200) quando o MCP cai; liveness/readiness independentes | Health `DOWN` (503): orquestradores reiniciariam o container sem resolver a causa, e o serviço ainda responde RF10 corretamente |
 | ADR-18 | Timeout de 5 s do embedding da pergunta aplicado pela aplicação na busca | Dois `EmbeddingModel` com timeouts diferentes: duplica configuração para resolver só o tempo limite |
+| ADR-19 | Toda conexão da aplicação roda `SET hnsw.iterative_scan = strict_order` (`hikari.connection-init-sql`) | `ALTER ROLE ... SET`: exige privilégio que o papel dono não tem. `SET LOCAL` por busca: exige transação em volta de cada consulta. Busca exata sem índice: perde o ganho do HNSW quando a base crescer |
+| ADR-20 | A chave do `/mcp` é uma terceira credencial (`CONHECIMENTO_MCP_API_KEY`, `Authorization: Bearer`), em cadeia de segurança própria que não aceita a chave administrativa | Reaproveitar a chave administrativa: quem chama o atendimento passaria a poder cadastrar conhecimento. Módulo de segurança MCP da comunidade: dependência nova sem necessidade |
 
 ---
 

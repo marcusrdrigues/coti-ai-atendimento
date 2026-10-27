@@ -63,7 +63,7 @@ spring:
         name: coti-conhecimento
         version: 1.0.0
         protocol: STREAMABLE
-        # endpoint padrão: /mcp — para mudar, use spring.ai.mcp.server.streamable-http.* (conferir nome exato)
+        # endpoint padrão: /mcp — para mudar, use spring.ai.mcp.server.streamable-http.mcp-endpoint (conferido na 2.0.1)
 ```
 
 ### 2. Publicar a ferramenta
@@ -85,7 +85,7 @@ public ResultadoBusca buscar(
         @McpToolParam(description = "Quantidade máxima de trechos a devolver.", required = false) Integer limite) { ... }
 ```
 
-- **Conferir** se `@McpTool.McpAnnotations` aceita `openWorldHint` e como declarar `minLength`, `maxLength`, `minimum`, `maximum` e `default` no `inputSchema` gerado (o contrato os exige). Se a anotação não permitir, documente a diferença no teste de contrato; a validação em código continua obrigatória.
+- Conferido na 2.0.1: `@McpTool.McpAnnotations` aceita `openWorldHint`, mas `@McpToolParam` só tem `description` e `required`, então o `inputSchema` gerado não traz `minLength`, `maxLength`, `minimum`, `maximum`, `default` nem `additionalProperties: false` (o contrato registra a diferença na §4.2). A validação em código continua obrigatória. O SDK valida tipo e campo obrigatório antes do método.
 
 ### 3. Validar parâmetros
 
@@ -107,7 +107,7 @@ A partir da 2.0.1, o tratamento de exceções do `@McpTool` segue o mesmo padrã
 
 Portanto:
 - Erros são `RuntimeException` de domínio com um código do contrato: `ArgumentosInvalidosException` (`ARGUMENTOS_INVALIDOS`), `BaseConhecimentoIndisponivelException` (`BASE_CONHECIMENTO_INDISPONIVEL`), `ModeloIndisponivelException` (`MODELO_INDISPONIVEL`); qualquer outra vira `ERRO_INTERNO`.
-- O texto de erro que chega ao cliente é o JSON `ErroFerramenta` (`{"codigo": "...", "mensagem": "..."}`), com mensagem segura, sem stack trace, SQL, tabela, classe ou valor recebido. **Conferir** como o Spring AI 2.0.1 monta o texto do `CallToolResult` de erro a partir da exceção (se usa a mensagem tal como está ou acrescenta prefixo) e garantir esse formato com teste.
+- O texto de erro que chega ao cliente é o JSON `ErroFerramenta` (`{"codigo": "...", "mensagem": "..."}`), com mensagem segura, sem stack trace, SQL, tabela, classe ou valor recebido. Conferido na 2.0.1: o texto do erro é `mensagem + quebra de linha + mensagem da causa raiz`. Sem causa o JSON saía duplicado; por isso `ErroFerramentaException` leva uma causa de mensagem vazia (o texto fica sendo o JSON mais uma quebra de linha) e o cliente faz `strip()`. O teste de contrato trava esse formato.
 - Não declare exceções checadas nos métodos `@McpTool`.
 - O detalhe técnico da falha vai só para o log interno, com o id de correlação.
 
