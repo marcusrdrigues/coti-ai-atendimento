@@ -30,8 +30,10 @@ class ConfiguracaoSpringAiTest {
     @Test
     void deveUsarOsParametrosDeChatDaArquitetura() {
         assertThat(ambiente.getProperty("spring.ai.openai.chat.model")).isEqualTo(ChavesTeste.MODELO_CHAT);
-        assertThat(ambiente.getProperty("spring.ai.openai.chat.temperature")).isEqualTo("0.0");
-        assertThat(ambiente.getProperty("spring.ai.openai.chat.max-tokens")).isEqualTo("600");
+        assertThat(ambiente.getProperty("spring.ai.openai.chat.temperature")).isNull();
+        assertThat(ambiente.getProperty("spring.ai.openai.chat.max-tokens")).isNull();
+        assertThat(ambiente.getProperty("spring.ai.openai.chat.max-completion-tokens")).isEqualTo("1500");
+        assertThat(ambiente.getProperty("spring.ai.openai.chat.reasoning-effort")).isEqualTo("low");
         assertThat(ambiente.getProperty("spring.ai.openai.max-retries")).isEqualTo("0");
         assertThat(ambiente.getProperty("spring.ai.openai.timeout")).isEqualTo("20s");
     }

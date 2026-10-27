@@ -366,8 +366,8 @@ spring:
       max-retries: 0
       chat:
         model: ${OPENAI_CHAT_MODEL}
-        temperature: 0.0                # fidelidade ao trecho, sem criatividade
-        max-tokens: 600                 # teto de custo por resposta
+        max-completion-tokens: 1500     # teto por tentativa; inclui tokens de raciocínio (modelo de raciocínio)
+        reasoning-effort: low           # sem temperature: modelos de raciocínio só aceitam o padrão (ver 04-plan.md)
     mcp.client:
       name: coti-atendimentos
       type: SYNC
@@ -545,7 +545,7 @@ sequenceDiagram
         C-->>A: 200 conhecimentoSuficiente=false
     end
     S->>G: gerar(contexto, perguntaMascarada)
-    G->>O: ChatClient sem tools, saída estruturada,<br/>temperatura 0, 600 tokens, timeout 20 s
+    G->>O: ChatClient sem tools, saída estruturada,<br/>`max_completion_tokens` 1500, `reasoning_effort` low, timeout 20 s
     O-->>G: {resposta, conhecimentoSuficiente, referencias}
     G-->>S: RespostaGerada
     S->>VL: validar(resposta, mapa T<n>)

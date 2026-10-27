@@ -68,8 +68,8 @@ spring:
       max-retries: 0                        # retry controlado pela aplicação (passo 6)
       chat:
         model: ${OPENAI_CHAT_MODEL}         # identificador com versão (snapshot), nunca alias
-        temperature: ${OPENAI_CHAT_TEMPERATURE:0.0}   # baixa: resposta fiel ao trecho, sem criatividade
-        max-tokens: ${OPENAI_CHAT_MAX_TOKENS:600}     # teto de custo por resposta (Art. 15)
+        max-completion-tokens: ${OPENAI_CHAT_MAX_COMPLETION_TOKENS:1500}  # teto de custo por tentativa; em modelo de raciocínio inclui o raciocínio
+        reasoning-effort: low   # só para modelo de raciocínio; sem temperature (o gpt-6-luna recusa valor diferente do padrão)
 ```
 
 - O valor do modelo é decidido em `specs/03-architecture.md`, com justificativa. Use o menor modelo que passa no eval.
@@ -205,7 +205,7 @@ Conforme o contrato, seção 6.5:
 ## Checklist de conclusão
 
 - [ ] BOM 2.0.1 importado; nenhum artefato Spring AI com versão avulsa.
-- [ ] Modelo, temperatura, `max-tokens` e timeout em configuração, com motivo documentado.
+- [ ] Modelo, parâmetros aceitos por ele (`max-completion-tokens`, `reasoning-effort`; `temperature` só se o modelo aceitar) e timeout em configuração, com motivo documentado.
 - [ ] `OPENAI_API_KEY` só por variável de ambiente; `.env.example` atualizado.
 - [ ] Embedding desligado na `api-atendimentos`.
 - [ ] Prompt em arquivo versionado, com delimitadores de instrução, trechos e pergunta.

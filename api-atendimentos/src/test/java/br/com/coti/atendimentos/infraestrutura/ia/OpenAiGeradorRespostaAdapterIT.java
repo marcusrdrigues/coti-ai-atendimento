@@ -80,15 +80,17 @@ class OpenAiGeradorRespostaAdapterIT extends TesteComOpenAiFalsa {
     }
 
     @Test
-    void aRequisicaoUsaOModeloDeConfiguracaoTemperaturaZeroEOTetoDeTokens() {
+    void aRequisicaoTemSoOsParametrosQueOModeloDeRaciocinioAceita() {
         gerar(null);
 
+        // A OpenAI real recusa (400) `max_tokens` e `temperature` diferente do padrão no gpt-6-luna (chamada de
+        // fumaça de 2026-10-27). Este teste trava a forma da requisição para isso não voltar.
         JsonNode corpo = requisicao(0);
         assertThat(corpo.get("model").asString()).isEqualTo(ChavesTeste.MODELO_CHAT);
-        assertThat(corpo.get("temperature").asDouble()).isZero();
-        int teto = corpo.has("max_completion_tokens") ? corpo.get("max_completion_tokens").asInt()
-                : corpo.get("max_tokens").asInt();
-        assertThat(teto).isEqualTo(600);
+        assertThat(corpo.has("max_tokens")).as("max_tokens é recusado por modelos de raciocínio").isFalse();
+        assertThat(corpo.has("temperature")).as("só a temperatura padrão é aceita").isFalse();
+        assertThat(corpo.get("max_completion_tokens").asInt()).isEqualTo(1500);
+        assertThat(corpo.get("reasoning_effort").asString()).isEqualTo("low");
     }
 
     @Test

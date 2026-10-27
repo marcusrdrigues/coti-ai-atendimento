@@ -114,7 +114,7 @@ Conferidos nos jars `2.0.1` e por teste contra uma OpenAI simulada (HTTP de verd
 | Tema | Achado |
 |---|---|
 | Saída estruturada | `ChatClient.prompt().advisors(AdvisorParams.ENABLE_NATIVE_STRUCTURED_OUTPUT)...call().entity(RespostaModelo.class)`. A requisição sai com `response_format` do tipo `json_schema`, `strict: true`, com os três campos. `@JsonProperty(required = true)` no `record` faz campo ausente falhar a conversão (vira `SaidaModeloInvalidaException`, não um valor padrão inventado) |
-| Parâmetros da requisição | Modelo de `OPENAI_CHAT_MODEL`, `temperature` 0, teto de 600 tokens e nenhuma `tools`/`functions` (testado na requisição recebida). O `ChatClient` não recebe `ToolCallbackProvider` |
+| Parâmetros da requisição | Modelo de `OPENAI_CHAT_MODEL`, `max_completion_tokens` 1500, `reasoning_effort` `low`, sem `temperature` e sem `max_tokens` (a OpenAI real os recusa no `gpt-6-luna`) e nenhuma `tools`/`functions` (testado na requisição recebida). O `ChatClient` não recebe `ToolCallbackProvider` |
 | Novas tentativas | `spring.ai.openai.max-retries: 0` e nenhum retry oculto do Spring AI: o teste conta as requisições que chegam à OpenAI simulada (429/500 → 2; 400/401/403 → 1). A repetição fica só em `OpenAiGeradorRespostaAdapter` (ADR-13) |
 | Falhas | Falha do SDK (`OpenAIIoException`, `OpenAIRetryableException`, 408/429/5xx) é transitória; 400/401/403 e demais 4xx são definitivas. Qualquer outra falha vinda da chamada é a conversão da saída para o schema, tratada como saída inválida |
 | Interrupção | Diferente do cliente MCP, interromper a chamada de chat por timeout (`Future.cancel(true)`) não deixou o cliente em mau estado: os testes seguintes continuam funcionando |
@@ -433,7 +433,7 @@ curl -i http://localhost:8082/actuator/health
 
 **Critérios de aceite.**
 - Montador: descarta abaixo de 0,70; `similaridade` nula vai para o fim; neutraliza `<trechos>`, `</trechos>`, `<trecho`, `</trecho>`, `<pergunta>`, `</pergunta>`; escapa aspas em atributos; 2.000 por trecho, 8.000 no total, máximo 5, remove inteiros os de menor similaridade; rótulos `T1..Tn`.
-- `ChatClient` sem ferramentas, temperatura 0, `max-tokens` 600, saída estruturada nativa `RespostaModelo(resposta, conhecimentoSuficiente, referencias)`; modelo vindo de `OPENAI_CHAT_MODEL`.
+- `ChatClient` sem ferramentas, sem temperatura, `max-completion-tokens` 1500, `reasoning-effort` low, saída estruturada nativa `RespostaModelo(resposta, conhecimentoSuficiente, referencias)`; modelo vindo de `OPENAI_CHAT_MODEL`.
 - Validador reprova: referência inexistente; `conhecimentoSuficiente=true` sem referência; valor monetário, data, horário, número de vagas ou condição comercial ausentes dos trechos referenciados. Até 2 novas tentativas com o motivo; depois, "sem evidência".
 - Fontes copiadas do resultado MCP (`id`, `documentoId`, `titulo`, `fonte`, `categoria`, `similaridade`), sem repetição, ordenadas; nada vindo do texto do modelo; rótulos `T<n>` não aparecem na resposta.
 - `conhecimentoSuficiente=false` do modelo → mensagem de recusa configurada, `fontes=[]`.
@@ -450,7 +450,7 @@ curl -i http://localhost:8082/actuator/health
 **Riscos técnicos.**
 - Saída estruturada nativa da OpenAI exige schema estrito; `List<String>` e campos obrigatórios devem gerar schema aceito → validar no WireMock com a forma da requisição.
 - Validador de valores/datas por regex pode gerar falso positivo (ex.: "2 anos de experiência") → casos de teste com textos reais da COTI; regra só para padrões monetários, datas, horários, "vagas".
-- Identificador do modelo de chat ainda não escolhido → testes usam valor fictício; escolha real na Fase 8 pelo eval.
+- Identificador do modelo de chat: o `.env` usa `gpt-6-luna`, que existe na documentação oficial da OpenAI (conferido em 2026-10-27) e é um modelo de raciocínio. A chamada de fumaça real mostrou que ele recusa `max_tokens` e `temperature: 0`; a configuração passou a `max-completion-tokens: 1500`, `reasoning-effort: low` e sem temperatura (`08-checklist.md`, Fase 7). Testes usam valor fictício; a escolha final do modelo e do esforço de raciocínio se decide no eval da Fase 8.
 - Propriedade para desligar o conteúdo de prompt nas observações do Spring AI → conferir.
 
 ---

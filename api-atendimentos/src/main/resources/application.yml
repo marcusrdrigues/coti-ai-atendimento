@@ -57,8 +57,11 @@ spring:
       max-retries: 0 # novas tentativas ficam na aplicação, em um único ponto (ADR-13)
       chat:
         model: ${OPENAI_CHAT_MODEL} # identificador com versão, sem padrão (ADR-15)
-        temperature: 0.0 # fidelidade ao trecho, sem criatividade
-        max-tokens: 600 # teto de custo por resposta
+        # Chamada real ao gpt-6-luna (2026-10-27): modelo de raciocínio. A OpenAI devolveu 400 para `max_tokens` e para
+        # `temperature: 0` ("only the default (1) value is supported"), por isso não há temperatura aqui. A fidelidade ao
+        # trecho vem do prompt e, principalmente, do validador em código, não de temperatura.
+        max-completion-tokens: 1500 # teto de custo por tentativa; inclui os tokens de raciocínio (resposta típica: ~50)
+        reasoning-effort: low # `none`/`low` gastaram 0 tokens de raciocínio; o padrão (`medium`) gastou 30 numa pergunta trivial
 
 coti:
   atendimentos:

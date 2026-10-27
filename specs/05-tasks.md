@@ -141,7 +141,7 @@ Legenda: `CON` = `api-conhecimento`, `ATE` = `api-atendimentos`, `INF` = infraes
   Dep.: T045. Verificação: `MontadorContextoRagTest`: limiar, `similaridade` nula no fim, neutralização de delimitadores, escape de aspas, 2.000/8.000/5 com remoção dos de menor similaridade, rótulos `T1..Tn`.
 - [x] **T055** `ATE` — Prompts `responder-pergunta.system.v1.st` e `responder-pergunta.user.v1.st` com delimitadores e regras do contrato §6.3–6.4.
   Dep.: T054. Verificação: teste carrega os recursos e confirma um único bloco `<trechos>` e um `<pergunta>` no prompt renderizado.
-- [x] **T056** `ATE` — `RespostaModelo` (`record`), `ChatClientConfig` (sem ferramentas) e `OpenAiGeradorRespostaAdapter` (saída estruturada nativa, temperatura 0, 600 tokens, modelo de `OPENAI_CHAT_MODEL`, 1 nova tentativa em transitório, tradução para `ModeloIndisponivelException`).
+- [x] **T056** `ATE` — `RespostaModelo` (`record`), `ChatClientConfig` (sem ferramentas) e `OpenAiGeradorRespostaAdapter` (saída estruturada nativa, `max-completion-tokens` 1500, `reasoning-effort` low, sem temperatura, modelo de `OPENAI_CHAT_MODEL`, 1 nova tentativa em transitório, tradução para `ModeloIndisponivelException`).
   Dep.: T051, T055. Verificação: `OpenAiGeradorRespostaAdapterIT` com a `OpenAiFalsa` (sem WireMock; 200 válido, 429, 500, timeout, 401, JSON inválido) e conferência da requisição enviada (sem `tools`).
 - [x] **T057** `ATE` — `ValidadorRespostaModelo`: referência inexistente, `conhecimentoSuficiente` sem referência, valores monetários, datas, horários, vagas e condições comerciais sem evidência literal.
   Dep.: T054. Verificação: `ValidadorRespostaModeloTest` com positivos e falsos positivos conhecidos ("2 anos de experiência" não reprova).
